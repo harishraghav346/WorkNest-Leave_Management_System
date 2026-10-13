@@ -190,3 +190,14 @@
   background: #fee2e2;
   color: #b91c1c;
 }
+
+.status-cancelled {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+.stat-icon.cancelled {
+  background: #f1f5f9;
+  color: #64748b;
+}

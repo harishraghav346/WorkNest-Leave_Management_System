@@ -56,7 +56,7 @@ const AppContent = () => {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             
-            {/* New Zylker / Modern Modules */}
+            {/* WorkNest / Modern Modules */}
             <Route
               path="/leave-entitlements"
               element={<ProtectedRoute component={LeaveEntitlements} />}

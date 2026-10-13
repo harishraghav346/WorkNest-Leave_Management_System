@@ -1,30 +1,30 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { getAllLeaves, deleteLeave } from "../services/leaveService";
+import { getAllLeaves, cancelLeave } from "../services/leaveService";
 import { useAuth } from "./AuthContext";
-import { FaCalendarAlt, FaEnvelopeOpenText, FaTrash, FaEdit, FaPlus, FaCheck, FaCopy } from "react-icons/fa";
+import { FaCalendarAlt, FaEnvelopeOpenText, FaEdit, FaPlus, FaCheck, FaCopy, FaBan } from "react-icons/fa";
 import "./ViewLeaves.css";
 
 const ViewLeaves = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, refreshUser } = useAuth();
   const [leaves, setLeaves] = useState([]);
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [isLoading, setIsLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState(null);
   const [selectedOooLeave, setSelectedOooLeave] = useState(null);
   const [oooText, setOooText] = useState("");
   const [copySuccess, setCopySuccess] = useState(false);
 
-  useEffect(() => {
-    fetchLeaves();
-  }, []);
-
-  const fetchLeaves = async () => {
+  const fetchLeaves = useCallback(async () => {
     setIsLoading(true);
     let allLeaves = [];
     let page = 0;
     let hasMore = true;
 
     try {
+      if (refreshUser) {
+        await refreshUser();
+      }
       while (hasMore) {
         const response = await getAllLeaves(page, 20);
         const data = response.data.content || response.data || [];
@@ -40,15 +40,25 @@ const ViewLeaves = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [refreshUser]);
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to cancel this leave request?")) {
+  useEffect(() => {
+    fetchLeaves();
+  }, [fetchLeaves]);
+
+  const handleCancel = async (id) => {
+    if (cancellingId) return;
+    if (window.confirm("Are you sure you want to cancel this leave request? If previously approved, your leave balance will be restored.")) {
+      setCancellingId(id);
       try {
-        await deleteLeave(id);
-        fetchLeaves();
+        await cancelLeave(id);
+        await fetchLeaves();
       } catch (error) {
-        console.error("Failed to delete leave:", error);
+        const errorMsg = error.response?.data?.message || "Failed to cancel leave request.";
+        alert(errorMsg);
+        console.error("Failed to cancel leave:", error);
+      } finally {
+        setCancellingId(null);
       }
     }
   };
@@ -93,7 +103,10 @@ const ViewLeaves = () => {
     }, 0);
 
   const totalQuota = 20;
-  const remainingDays = Math.max(0, totalQuota - approvedDays);
+  // Use real backend leaveBalance; fallback to calculated balance only if user object is not yet loaded
+  const remainingDays = (user && user.leaveBalance !== undefined && user.leaveBalance !== null)
+    ? user.leaveBalance
+    : Math.max(0, totalQuota - approvedDays);
 
   const handleGenerateOoo = (leave) => {
     setSelectedOooLeave(leave);
@@ -111,7 +124,7 @@ For any urgent matters regarding ongoing projects, please contact our team lead 
 
 Best regards,
 ${name}
-LeaveTracker Automated Workforce Notification`;
+WorkNest Automated Workforce Notification`;
 
     setOooText(generated);
     setCopySuccess(false);
@@ -163,7 +176,7 @@ LeaveTracker Automated Workforce Notification`;
 
       {/* Filter Tabs */}
       <div className="leaves-filter-bar">
-        {["ALL", "PENDING", "APPROVED", "REJECTED"].map((status) => (
+        {["ALL", "PENDING", "APPROVED", "REJECTED", "CANCELLED"].map((status) => (
           <button
             key={status}
             onClick={() => setFilterStatus(status)}
@@ -217,12 +230,24 @@ LeaveTracker Automated Workforce Notification`;
               </div>
 
               <div className="leave-card-footer">
-                <Link to={`/update-leave/${leave.id}`} className="btn-action btn-edit">
-                  <FaEdit /> Edit
-                </Link>
-                <button onClick={() => handleDelete(leave.id)} className="btn-action btn-delete">
-                  <FaTrash /> Cancel
-                </button>
+                {leave.status !== 'Cancelled' && leave.status !== 'Approved' ? (
+                  <Link to={`/update-leave/${leave.id}`} className="btn-action btn-edit">
+                    <FaEdit /> Edit
+                  </Link>
+                ) : <span />}
+                {leave.status !== 'Cancelled' ? (
+                  <button 
+                    onClick={() => handleCancel(leave.id)} 
+                    className="btn-action btn-delete"
+                    disabled={cancellingId === leave.id}
+                  >
+                    <FaBan /> {cancellingId === leave.id ? "Cancelling..." : "Cancel"}
+                  </button>
+                ) : (
+                  <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                    Request Cancelled
+                  </span>
+                )}
               </div>
             </div>
           ))}

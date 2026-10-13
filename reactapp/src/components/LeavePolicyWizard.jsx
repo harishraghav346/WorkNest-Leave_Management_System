@@ -100,7 +100,7 @@ const LeavePolicyWizard = () => {
 
           <div style={{ marginTop: 'auto', paddingTop: '2rem' }}>
             <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-              Zylker Leave Framework v2.4 • Dynamic Policy Engine
+              WorkNest Leave Framework v2.4 • Dynamic Policy Engine
             </span>
           </div>
         </div>

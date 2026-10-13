@@ -77,7 +77,7 @@ const Signup = () => {
                 <FaBuilding />
               </div>
               <div className="brand-text-group">
-                <h1>LeaveTracker</h1>
+                <h1>WorkNest</h1>
                 <span className="brand-tagline">AI-Powered Workforce Platform</span>
               </div>
             </div>

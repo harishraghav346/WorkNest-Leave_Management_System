@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getAllLeaves, approveLeave, rejectLeave } from '../services/leaveService';
 import { FaRobot, FaCheck, FaTimes, FaClock, FaCheckCircle, FaExclamationTriangle, FaCalendarAlt } from 'react-icons/fa';
 import './AdminDashboard.css';
@@ -9,14 +9,10 @@ const AdminDashboard = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [analyzingId, setAnalyzingId] = useState(null);
+  const [processingId, setProcessingId] = useState(null);
   const [aiAnalysisMap, setAiAnalysisMap] = useState({});
 
-  useEffect(() => {
-    fetchLeaveRequests(currentPage);
-    fetchAllForAnalysis();
-  }, [currentPage]);
-
-  const fetchLeaveRequests = async (page) => {
+  const fetchLeaveRequests = useCallback(async (page) => {
     try {
       const response = await getAllLeaves(page, 10);
       const data = response.data.content || response.data || [];
@@ -25,9 +21,9 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error('Error fetching leave requests:', error);
     }
-  };
+  }, []);
 
-  const fetchAllForAnalysis = async () => {
+  const fetchAllForAnalysis = useCallback(async () => {
     try {
       const response = await getAllLeaves(0, 100);
       const data = response.data.content || response.data || [];
@@ -35,25 +31,38 @@ const AdminDashboard = () => {
     } catch (err) {
       console.error('Error fetching leaves for analysis', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchLeaveRequests(currentPage);
+    fetchAllForAnalysis();
+  }, [currentPage, fetchLeaveRequests, fetchAllForAnalysis]);
 
   const handleApprove = async (id) => {
+    if (processingId) return;
+    setProcessingId(id);
     try {
       await approveLeave(id);
-      fetchLeaveRequests(currentPage);
-      fetchAllForAnalysis();
+      await fetchLeaveRequests(currentPage);
+      await fetchAllForAnalysis();
     } catch (error) {
       console.error('Error approving leave request:', error);
+    } finally {
+      setProcessingId(null);
     }
   };
 
   const handleReject = async (id) => {
+    if (processingId) return;
+    setProcessingId(id);
     try {
       await rejectLeave(id);
-      fetchLeaveRequests(currentPage);
-      fetchAllForAnalysis();
+      await fetchLeaveRequests(currentPage);
+      await fetchAllForAnalysis();
     } catch (error) {
       console.error('Error rejecting leave request:', error);
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -236,11 +245,21 @@ const AdminDashboard = () => {
                       <td>
                         {request.status === 'Pending' && (
                           <div className="action-buttons-group">
-                            <button className="approve" onClick={() => handleApprove(request.id)} title="Approve">
-                              <FaCheck /> Approve
+                            <button 
+                              className="approve" 
+                              onClick={() => handleApprove(request.id)} 
+                              disabled={processingId === request.id}
+                              title="Approve"
+                            >
+                              <FaCheck /> {processingId === request.id ? 'Approving...' : 'Approve'}
                             </button>
-                            <button className="reject" onClick={() => handleReject(request.id)} title="Reject">
-                              <FaTimes /> Reject
+                            <button 
+                              className="reject" 
+                              onClick={() => handleReject(request.id)} 
+                              disabled={processingId === request.id}
+                              title="Reject"
+                            >
+                              <FaTimes /> {processingId === request.id ? 'Rejecting...' : 'Reject'}
                             </button>
                           </div>
                         )}

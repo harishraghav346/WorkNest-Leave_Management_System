@@ -22,6 +22,12 @@ public class Leave {
   private String impactScore = "Low"; // Low, Medium, High (Calculated by AI or rules)
   private String aiRecommendation; // AI analysis / recommendation summary
   private String rejectionReason;
+  private String createdAt;
+  private String actionBy;
+  private String actionAt;
+  private String approvedBy;
+  private String rejectedBy;
+  private String cancelledBy;
 
   public Leave() {
   }
@@ -100,5 +106,41 @@ public class Leave {
   }
   public void setRejectionReason(String rejectionReason) {
     this.rejectionReason = rejectionReason;
+  }
+  public String getCreatedAt() {
+    return createdAt;
+  }
+  public void setCreatedAt(String createdAt) {
+    this.createdAt = createdAt;
+  }
+  public String getActionBy() {
+    return actionBy;
+  }
+  public void setActionBy(String actionBy) {
+    this.actionBy = actionBy;
+  }
+  public String getActionAt() {
+    return actionAt;
+  }
+  public void setActionAt(String actionAt) {
+    this.actionAt = actionAt;
+  }
+  public String getApprovedBy() {
+    return approvedBy;
+  }
+  public void setApprovedBy(String approvedBy) {
+    this.approvedBy = approvedBy;
+  }
+  public String getRejectedBy() {
+    return rejectedBy;
+  }
+  public void setRejectedBy(String rejectedBy) {
+    this.rejectedBy = rejectedBy;
+  }
+  public String getCancelledBy() {
+    return cancelledBy;
+  }
+  public void setCancelledBy(String cancelledBy) {
+    this.cancelledBy = cancelledBy;
   }
 }

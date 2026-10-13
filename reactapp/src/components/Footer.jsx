@@ -7,7 +7,7 @@ const Footer = () => {
   return (
     <footer className="app-footer">
       <div className="footer-content">
-        <h2 className="footer-logo">LeaveTracker</h2>
+        <h2 className="footer-logo">WorkNest</h2>
 
         <div className="footer-links">
           <Link to="/" className="footer-link">Home</Link>
@@ -33,7 +33,7 @@ const Footer = () => {
         </div>
 
         <p className="footer-copy">
-          &copy; {new Date().getFullYear()} LeaveTracker AI Workforce Suite. All Rights Reserved.
+          &copy; {new Date().getFullYear()} WorkNest HR Workforce Suite. All Rights Reserved.
         </p>
       </div>
     </footer>

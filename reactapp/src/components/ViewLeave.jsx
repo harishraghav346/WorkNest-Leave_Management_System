@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getAllLeaves, deleteLeave } from '../services/leaveService';
 import { Link } from 'react-router-dom';
 
@@ -6,11 +6,7 @@ const ViewLeave = () => {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchLeaves();
-  }, []);
-
-  const fetchLeaves = async () => {
+  const fetchLeaves = useCallback(async () => {
     try {
       setLoading(true);
       const response = await getAllLeaves();
@@ -22,7 +18,11 @@ const ViewLeave = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchLeaves();
+  }, [fetchLeaves]);
 
   const handleDelete = async (id) => {
     try {

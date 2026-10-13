@@ -30,8 +30,10 @@ public class AuthController {
             return new ResponseEntity<>("Username is already taken", HttpStatus.BAD_REQUEST);
         }
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        if (user.getRole() == null || user.getRole().isBlank()) {
-            user.setRole("employee");
+        // Security hardening: Force employee role for all public registrations
+        user.setRole("employee");
+        if (user.getLeaveBalance() == null) {
+            user.setLeaveBalance(20);
         }
         User savedUser = userService.save(user);
         String token = jwtUtil.generateToken(savedUser.getUsername(), savedUser.getRole());

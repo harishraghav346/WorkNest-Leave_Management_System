@@ -117,7 +117,7 @@ const AiAssistant = () => {
         if (lower.includes('policy') || lower.includes('notice') || lower.includes('rules')) {
             return {
                 type: 'info',
-                reply: `**Zylker Modern Leave Guidelines:**\n• **Instant Approvals:** 1-day leaves with zero team overlap are auto-approved instantly.\n• **Planned Leaves** (>2 days): Require 2 business days advance notice.\n• **Location Rules:** Location-specific public holidays apply to Bangalore, New York, London, and Remote.\n• **Carryover:** Up to 5 unused leave days can be carried over annually.`
+                reply: `**WorkNest Modern Leave Guidelines:**\n• **Instant Approvals:** 1-day leaves with zero team overlap are auto-approved instantly.\n• **Planned Leaves** (>2 days): Require 2 business days advance notice.\n• **Location Rules:** Location-specific public holidays apply to Bangalore, New York, London, and Remote.\n• **Carryover:** Up to 5 unused leave days can be carried over annually.`
             };
         }
 

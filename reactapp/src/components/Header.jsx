@@ -25,7 +25,7 @@ const Header = () => {
 
   return (
     <header className="app-header">
-      {/* Brand Logo with Zylker / LeaveTracker Badge */}
+      {/* Brand Logo with WorkNest Badge */}
       <NavLink to="/" className="logo-container">
         <div style={{
           display: 'flex',
@@ -33,7 +33,7 @@ const Header = () => {
           gap: '8px'
         }}>
           <div style={{
-            background: '#ef4444',
+            background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
             color: '#ffffff',
             fontWeight: 900,
             fontSize: '1.1rem',
@@ -41,25 +41,25 @@ const Header = () => {
             borderRadius: '6px',
             letterSpacing: '0.05em'
           }}>
-            Z
+            W
           </div>
           <span style={{
             fontWeight: 800,
             fontSize: '1.35rem',
             color: '#0f172a',
-            letterSpacing: '0.08em'
+            letterSpacing: '0.05em'
           }}>
-            ZYLKER
+            WorkNest
           </span>
           <span style={{
             fontSize: '0.72rem',
-            background: 'rgba(99, 102, 241, 0.12)',
-            color: '#6366f1',
+            background: 'rgba(2, 132, 199, 0.12)',
+            color: '#0284c7',
             padding: '2px 8px',
             borderRadius: '9999px',
             fontWeight: 700
           }}>
-            LeaveTracker
+            HRMS
           </span>
         </div>
       </NavLink>

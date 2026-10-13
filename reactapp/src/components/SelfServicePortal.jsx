@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import { getAllLeaves, cancelLeave } from "../services/leaveService";
 import { 
   FaUser, 
   FaTint, 
@@ -16,9 +17,47 @@ import {
 import "./SelfServicePortal.css";
 
 const SelfServicePortal = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const [leaves, setLeaves] = useState([]);
+  const [loadingLeaves, setLoadingLeaves] = useState(true);
+  const [cancellingId, setCancellingId] = useState(null);
   const [isCheckedIn, setIsCheckedIn] = useState(true);
   const [showPayslipModal, setShowPayslipModal] = useState(false);
+
+  const loadPortalData = useCallback(async () => {
+    setLoadingLeaves(true);
+    try {
+      if (refreshUser) {
+        await refreshUser();
+      }
+      const response = await getAllLeaves(0, 50);
+      const data = response.data.content || response.data || [];
+      setLeaves(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load leaves in ESS portal:", err);
+    } finally {
+      setLoadingLeaves(false);
+    }
+  }, [refreshUser]);
+
+  useEffect(() => {
+    loadPortalData();
+  }, [loadPortalData]);
+
+  const handleCancelLeave = async (id) => {
+    if (cancellingId) return;
+    if (window.confirm("Cancel this leave request? If previously approved, your leave balance will be restored.")) {
+      setCancellingId(id);
+      try {
+        await cancelLeave(id);
+        await loadPortalData();
+      } catch (err) {
+        alert(err.response?.data?.message || "Failed to cancel leave.");
+      } finally {
+        setCancellingId(null);
+      }
+    }
+  };
 
   // Interactive Emoji Reactions (Image 5)
   const [reactions, setReactions] = useState([
@@ -44,7 +83,7 @@ const SelfServicePortal = () => {
     }));
   };
 
-  const employeeName = user?.name || user?.username || "Emily Dickinson";
+  const employeeName = user?.name || user?.username || "Employee";
 
   return (
     <div className="ess-portal-container">
@@ -97,7 +136,7 @@ const SelfServicePortal = () => {
               <button 
                 type="button" 
                 className="btn-view-profile-orange"
-                onClick={() => alert(`Employee ID: EMP-2024-91\nName: ${employeeName}\nDepartment: Quality Assurance\nStatus: Active (Verified)`)}
+                onClick={() => alert(`Employee Profile:\nUsername: ${user?.username || employeeName}\nRole: ${(user?.role || "employee").toUpperCase()}\nAvailable Leave Balance: ${user?.leaveBalance !== undefined ? user.leaveBalance : 20} Days\nAccount Status: Active (Verified)`)}
               >
                 View Profile
               </button>
@@ -109,20 +148,20 @@ const SelfServicePortal = () => {
                 <span>{employeeName}</span>
               </div>
               <div className="detail-line-item">
+                <FaLaptopCode className="detail-icon" style={{ color: '#6366f1' }} />
+                <span>Role: <strong>{(user?.role || "Employee").toUpperCase()}</strong></span>
+              </div>
+              <div className="detail-line-item">
+                <FaStar className="detail-icon" style={{ color: '#eab308' }} />
+                <span>Leave Balance: <strong>{user?.leaveBalance !== undefined && user?.leaveBalance !== null ? user.leaveBalance : 20} Days</strong></span>
+              </div>
+              <div className="detail-line-item">
                 <FaTint className="detail-icon" style={{ color: '#ef4444' }} />
                 <span>Blood Group: <strong>B+</strong></span>
               </div>
               <div className="detail-line-item">
                 <FaBirthdayCake className="detail-icon" style={{ color: '#f59e0b' }} />
                 <span>DOB: <strong>4 September 1998</strong></span>
-              </div>
-              <div className="detail-line-item">
-                <FaLaptopCode className="detail-icon" style={{ color: '#6366f1' }} />
-                <span>Role: <strong>Quality Analyst</strong></span>
-              </div>
-              <div className="detail-line-item">
-                <FaStar className="detail-icon" style={{ color: '#eab308' }} />
-                <span>Experience: <strong>6 year(s) 9 month(s) 15 day(s)</strong></span>
               </div>
               <div className="detail-line-item">
                 <FaMapMarkerAlt className="detail-icon" style={{ color: '#10b981' }} />
@@ -188,28 +227,28 @@ const SelfServicePortal = () => {
 
           <div className="balance-boxes-row">
             <div className="balance-mini-box">
-              <span className="balance-mini-box-label">Casual Leave</span>
-              <span className="balance-mini-icon">🗓️</span>
-              <span className="balance-mini-box-val">06</span>
-              <span className="balance-mini-box-sub">Days</span>
-            </div>
-            <div className="balance-mini-box">
-              <span className="balance-mini-box-label">Sick Leave</span>
-              <span className="balance-mini-icon">📋</span>
-              <span className="balance-mini-box-val">04</span>
-              <span className="balance-mini-box-sub">Days</span>
-            </div>
-            <div className="balance-mini-box">
-              <span className="balance-mini-box-label">Annual Leave</span>
+              <span className="balance-mini-box-label">Available Balance</span>
               <span className="balance-mini-icon">🏖️</span>
-              <span className="balance-mini-box-val">12</span>
+              <span className="balance-mini-box-val">{user?.leaveBalance !== undefined && user?.leaveBalance !== null ? user.leaveBalance : 20}</span>
               <span className="balance-mini-box-sub">Days</span>
             </div>
             <div className="balance-mini-box">
-              <span className="balance-mini-box-label">Comp Off</span>
-              <span className="balance-mini-icon">⛵</span>
-              <span className="balance-mini-box-val">01</span>
-              <span className="balance-mini-box-sub">Days</span>
+              <span className="balance-mini-box-label">Approved</span>
+              <span className="balance-mini-icon">✅</span>
+              <span className="balance-mini-box-val">{leaves.filter(l => l.status === 'Approved').length}</span>
+              <span className="balance-mini-box-sub">Requests</span>
+            </div>
+            <div className="balance-mini-box">
+              <span className="balance-mini-box-label">Pending</span>
+              <span className="balance-mini-icon">⏳</span>
+              <span className="balance-mini-box-val">{leaves.filter(l => l.status === 'Pending').length}</span>
+              <span className="balance-mini-box-sub">Requests</span>
+            </div>
+            <div className="balance-mini-box">
+              <span className="balance-mini-box-label">Cancelled</span>
+              <span className="balance-mini-icon">🚫</span>
+              <span className="balance-mini-box-val">{leaves.filter(l => l.status === 'Cancelled').length}</span>
+              <span className="balance-mini-box-sub">Requests</span>
             </div>
           </div>
         </div>
@@ -295,53 +334,83 @@ const SelfServicePortal = () => {
                 <th>Applied by</th>
                 <th>Approval status</th>
                 <th>Count</th>
-                <th>Lop days</th>
-                <th>Applied date</th>
+                <th>Reason / Notes</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>11 Aug 2026</td>
-                <td>11 Aug 2026</td>
-                <td><span style={{ fontWeight: 600, color: '#0284c7' }}>LOP</span></td>
-                <td>Steve wilson</td>
-                <td>
-                  <span style={{ color: '#10b981', fontWeight: 700 }}>
-                    <span className="status-dot-active"></span>Approved
-                  </span>
-                </td>
-                <td>1 day(s)</td>
-                <td>1</td>
-                <td>10 Aug 2026</td>
-              </tr>
-              <tr>
-                <td>20 Oct 2026</td>
-                <td>24 Oct 2026</td>
-                <td><span style={{ fontWeight: 600, color: '#0284c7' }}>Casual Leave</span></td>
-                <td>{employeeName}</td>
-                <td>
-                  <span style={{ color: '#f59e0b', fontWeight: 700 }}>
-                    <span className="status-dot-active" style={{ background: '#f59e0b' }}></span>Pending
-                  </span>
-                </td>
-                <td>5 day(s)</td>
-                <td>0</td>
-                <td>13 Oct 2026</td>
-              </tr>
-              <tr>
-                <td>15 Oct 2026</td>
-                <td>16 Oct 2026</td>
-                <td><span style={{ fontWeight: 600, color: '#0284c7' }}>Sick Leave</span></td>
-                <td>Sam Taylor</td>
-                <td>
-                  <span style={{ color: '#10b981', fontWeight: 700 }}>
-                    <span className="status-dot-active"></span>Approved
-                  </span>
-                </td>
-                <td>2 day(s)</td>
-                <td>0</td>
-                <td>12 Oct 2026</td>
-              </tr>
+              {loadingLeaves ? (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                    Loading your leave records...
+                  </td>
+                </tr>
+              ) : leaves.length > 0 ? (
+                leaves.map((l) => (
+                  <tr key={l.id}>
+                    <td>{l.startDate ? new Date(l.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "-"}</td>
+                    <td>{l.endDate ? new Date(l.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "-"}</td>
+                    <td><span style={{ fontWeight: 600, color: '#0284c7' }}>{l.leaveType || "Leave"}</span></td>
+                    <td>{l.employeeName}</td>
+                    <td>
+                      <span style={{ 
+                        color: l.status === 'Approved' ? '#10b981' : l.status === 'Pending' ? '#f59e0b' : l.status === 'Rejected' ? '#ef4444' : '#64748b', 
+                        fontWeight: 700 
+                      }}>
+                        <span className="status-dot-active" style={{ 
+                          background: l.status === 'Approved' ? '#10b981' : l.status === 'Pending' ? '#f59e0b' : l.status === 'Rejected' ? '#ef4444' : '#64748b' 
+                        }}></span>
+                        {l.status}
+                      </span>
+                    </td>
+                    <td>{l.daysCount ? `${l.daysCount} day(s)` : "1 day(s)"}</td>
+                    <td>
+                      <div style={{ maxWidth: '240px' }}>
+                        <span style={{ color: '#334155' }}>"{l.reason}"</span>
+                        {l.status === 'Rejected' && l.rejectionReason && (
+                          <div style={{ fontSize: '0.8rem', color: '#dc2626', marginTop: '4px', fontWeight: 600 }}>
+                            Rejection: {l.rejectionReason}
+                          </div>
+                        )}
+                        {l.status === 'Cancelled' && (
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px', fontStyle: 'italic' }}>
+                            Refunded to balance
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      {l.status !== 'Cancelled' ? (
+                        <button 
+                          type="button"
+                          onClick={() => handleCancelLeave(l.id)}
+                          disabled={cancellingId === l.id}
+                          style={{
+                            background: '#fee2e2',
+                            color: '#dc2626',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {cancellingId === l.id ? 'Cancelling...' : 'Cancel'}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>Cancelled</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                    No leave requests found for your profile. Click "+ Request Time Off" to apply.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

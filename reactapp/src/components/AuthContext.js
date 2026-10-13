@@ -1,31 +1,56 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
+import apiClient from "../services/apiClient";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
 
-    const login = (userData, token) => {
+    const logout = useCallback(() => {
+        setUser(null);
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+    }, []);
+
+    const login = useCallback((userData, token) => {
         setUser(userData);
         localStorage.setItem("user", JSON.stringify(userData));
         if (token) {
             localStorage.setItem("token", token);
         }
-    };
+    }, []);
 
-    const logout = () => {
-        setUser(null);
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-    };
+    const refreshUser = useCallback(async () => {
+        const token = localStorage.getItem("token");
+        if (!token) return null;
+        try {
+            const response = await apiClient.get("/auth/me");
+            if (response.data) {
+                setUser(prev => {
+                    if (prev && JSON.stringify(prev) === JSON.stringify(response.data)) {
+                        return prev;
+                    }
+                    return response.data;
+                });
+                localStorage.setItem("user", JSON.stringify(response.data));
+                return response.data;
+            }
+        } catch (e) {
+            console.error("Failed to refresh user profile from /auth/me", e);
+            if (e.response && (e.response.status === 401 || e.response.status === 403)) {
+                logout();
+            }
+        }
+        return null;
+    }, [logout]);
 
-    const isAdmin = () => {
-        return user && (user.role === "admin" || user.role === "ADMIN");
-    };
+    const isAdmin = useCallback(() => {
+        return Boolean(user && (user.role === "admin" || user.role === "ADMIN"));
+    }, [user]);
 
-    const isEmployee = () => {
-        return user && (user.role === "employee" || user.role === "EMPLOYEE");
-    };
+    const isEmployee = useCallback(() => {
+        return Boolean(user && (user.role === "employee" || user.role === "EMPLOYEE"));
+    }, [user]);
 
     useEffect(() => {
         const savedUser = localStorage.getItem("user");
@@ -36,10 +61,15 @@ export const AuthProvider = ({ children }) => {
                 console.error("Failed to parse stored user", e);
             }
         }
-    }, []);
+        // If authenticated token exists, sync live profile & leaveBalance from backend
+        const token = localStorage.getItem("token");
+        if (token) {
+            refreshUser();
+        }
+    }, [refreshUser]);
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, isAdmin, isEmployee }}>
+        <AuthContext.Provider value={{ user, login, logout, isAdmin, isEmployee, refreshUser }}>
             {children}
         </AuthContext.Provider>
     );
@@ -53,7 +83,8 @@ export const useAuth = () => {
             login: () => {},
             logout: () => {},
             isAdmin: () => false,
-            isEmployee: () => false
+            isEmployee: () => false,
+            refreshUser: async () => null
         };
     }
     return context;

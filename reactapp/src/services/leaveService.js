@@ -54,8 +54,14 @@ export const approveLeave = (id) => {
         .catch(handleError);
 };
 
-export const rejectLeave = (id) => {
-    return apiClient.put(`/leaves/${id}/reject`)
+export const rejectLeave = (id, rejectionReason) => {
+    return apiClient.put(`/leaves/${id}/reject`, rejectionReason ? { rejectionReason } : {})
+        .then(handleResponse)
+        .catch(handleError);
+};
+
+export const cancelLeave = (id) => {
+    return apiClient.put(`/leaves/${id}/cancel`)
         .then(handleResponse)
         .catch(handleError);
 };

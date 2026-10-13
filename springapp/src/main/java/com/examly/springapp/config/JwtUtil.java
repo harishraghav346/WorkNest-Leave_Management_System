@@ -3,11 +3,15 @@ package com.examly.springapp.config;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -15,15 +19,50 @@ import java.util.Map;
 @Component
 public class JwtUtil {
 
-    @Value("${jwt.secret:hrleavetrackersupersafesecretkeyforhmacsha256tokenshrleaveapp2025}")
+    @Autowired
+    private Environment environment;
+
+    @Value("${jwt.secret:}")
     private String secret;
 
     @Value("${jwt.expiration:86400000}")
     private long expiration;
 
-    private SecretKey getSigningKey() {
+    private SecretKey cachedSigningKey;
+
+    @PostConstruct
+    public void validateAndInitializeKey() {
+        boolean isProd = false;
+        if (environment != null && environment.getActiveProfiles() != null) {
+            isProd = Arrays.asList(environment.getActiveProfiles()).contains("prod");
+        }
+        
+        if (secret == null || secret.isBlank()) {
+            if (isProd) {
+                throw new IllegalStateException(
+                    "FATAL SECURITY CONFIGURATION: Production profile 'prod' requires the 'JWT_SECRET' environment variable to be explicitly configured. Server startup aborted."
+                );
+            } else {
+                secret = "worknest-dev-environment-only-hmac-sha256-secret-key-32bytes-min";
+            }
+        }
+
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
-        return Keys.hmacShaKeyFor(keyBytes);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException(
+                "FATAL SECURITY CONFIGURATION: The JWT secret key must provide at least 32 bytes (256 bits) of key material for HMAC-SHA-256 cryptographic security. Provided length: " 
+                + keyBytes.length + " bytes. Server startup aborted."
+            );
+        }
+
+        this.cachedSigningKey = Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    public SecretKey getSigningKey() {
+        if (cachedSigningKey == null) {
+            validateAndInitializeKey();
+        }
+        return cachedSigningKey;
     }
 
     public String generateToken(String username, String role) {
