@@ -1,0 +1,264 @@
+/* ==========================================================================
+   HR LEAVE TRACKER - LEAVE BALANCES & ENTITLEMENTS (ZYLKER STYLE)
+   ========================================================================== */
+
+.entitlements-page {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.entitlements-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.date-range-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 10px;
+  padding: 6px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.stepper-nav-btn {
+  background: none;
+  border: none;
+  color: var(--slate-600);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.stepper-nav-btn:hover {
+  background: var(--slate-100);
+  color: var(--slate-900);
+}
+
+.stepper-range-text {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  margin: 0 8px;
+}
+
+.entitlements-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.location-filter-select {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--slate-200);
+  background: #ffffff;
+  color: var(--slate-700);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.view-mode-toggle-group {
+  display: flex;
+  border: 1px solid var(--slate-200);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.toggle-view-btn {
+  background: #ffffff;
+  border: none;
+  padding: 8px 12px;
+  color: var(--slate-500);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.toggle-view-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.btn-apply-leave-blue {
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 20px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-apply-leave-blue:hover {
+  background: #0369a1;
+  transform: translateY(-1px);
+}
+
+.btn-more-options {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 10px;
+  padding: 8px 14px;
+  color: var(--slate-600);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+/* --------------------------------------------------------------------------
+   Entitlements Card Grid (Exact Reference Image 4)
+   -------------------------------------------------------------------------- */
+.entitlements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 22px;
+}
+
+.entitlement-card {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 16px;
+  padding: 1.75rem 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.entitlement-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  border-color: #cbd5e1;
+}
+
+.entitlement-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.entitlement-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  margin-bottom: 1rem;
+}
+
+.entitlement-icon-box {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.entitlement-icon-box.sky {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.entitlement-icon-box.blue {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.entitlement-icon-box.green {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.entitlement-icon-box.peach {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.entitlement-icon-box.rose {
+  background: #ffe4e6;
+  color: #e11d48;
+}
+
+.entitlement-icon-box.purple {
+  background: #f3e8ff;
+  color: #9333ea;
+}
+
+.entitlement-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.entitlement-metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.92rem;
+  color: var(--slate-600);
+}
+
+.metric-label-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metric-info-icon {
+  color: var(--slate-400);
+  font-size: 0.8rem;
+  cursor: help;
+}
+
+.metric-number-val {
+  font-weight: 700;
+  color: var(--slate-900);
+  font-size: 1rem;
+}
+
+.metric-number-val.available-highlight {
+  color: #16a34a;
+}
+
+.entitlement-card-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--slate-200);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.policy-badge-link {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0284c7;
+  text-decoration: none;
+}
+
+.policy-badge-link:hover {
+  text-decoration: underline;
+}

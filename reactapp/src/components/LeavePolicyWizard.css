@@ -1,0 +1,317 @@
+/* ==========================================================================
+   HR LEAVE TRACKER - LEAVE POLICY WIZARD (REFERENCE IMAGES 1 & 3)
+   ========================================================================== */
+
+.policy-wizard-page {
+  padding: 2.5rem 2rem 5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.wizard-card-container {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 20px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  overflow: hidden;
+  min-height: 650px;
+}
+
+/* --------------------------------------------------------------------------
+   Left Stepper Navigation (Matching Images 1 & 3)
+   -------------------------------------------------------------------------- */
+.wizard-stepper-sidebar {
+  background: #f8fafc;
+  border-right: 1px solid var(--slate-200);
+  padding: 3rem 2rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.stepper-steps-list {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.stepper-step-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  padding-bottom: 2.75rem;
+  cursor: pointer;
+}
+
+.stepper-step-item:last-child {
+  padding-bottom: 0;
+}
+
+/* Vertical Connecting Line */
+.stepper-step-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 36px;
+  left: 17px;
+  bottom: 0;
+  width: 2px;
+  background: #cbd5e1;
+}
+
+.stepper-step-item.active-or-done:not(:last-child)::after {
+  background: #0284c7;
+}
+
+.step-number-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  z-index: 2;
+  transition: all 0.2s ease;
+}
+
+.stepper-step-item.active .step-number-circle {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.2);
+}
+
+.stepper-step-item.completed .step-number-circle {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.step-label-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #64748b;
+  transition: color 0.2s ease;
+}
+
+.stepper-step-item.active .step-label-text {
+  color: #0f172a;
+}
+
+/* --------------------------------------------------------------------------
+   Right Form Content
+   -------------------------------------------------------------------------- */
+.wizard-form-content {
+  padding: 3.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.wizard-section-header {
+  margin-bottom: 2rem;
+}
+
+.wizard-section-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin-bottom: 6px;
+}
+
+.wizard-section-subtitle {
+  font-size: 0.92rem;
+  color: var(--slate-500);
+}
+
+.wizard-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 680px;
+}
+
+.wizard-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wizard-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--slate-700);
+}
+
+.wizard-label span.req {
+  color: #ef4444;
+}
+
+.name-color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.wizard-input-text {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--slate-300);
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--slate-900);
+  transition: all 0.2s ease;
+}
+
+.wizard-input-text:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.color-swatch-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #38bdf8;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.image-icon-picker-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid var(--slate-300);
+  color: var(--slate-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.wizard-select {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--slate-300);
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: #ffffff;
+  color: var(--slate-800);
+  cursor: pointer;
+}
+
+.unit-radio-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-top: 4px;
+}
+
+.unit-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--slate-700);
+  cursor: pointer;
+}
+
+/* Entitlement Credit Row */
+.entitlement-credit-box {
+  background: #f8fafc;
+  border: 1px solid var(--slate-200);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.credit-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.92rem;
+  color: var(--slate-700);
+  font-weight: 600;
+}
+
+.credit-num-input {
+  width: 70px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--slate-300);
+  text-align: center;
+  font-weight: 700;
+}
+
+.checkbox-option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  color: var(--slate-700);
+  cursor: pointer;
+}
+
+/* Wizard Navigation Buttons */
+.wizard-footer-buttons {
+  margin-top: 3rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--slate-200);
+  padding-top: 1.5rem;
+}
+
+.btn-wizard-back {
+  padding: 10px 20px;
+  border: 1px solid var(--slate-300);
+  background: #ffffff;
+  color: var(--slate-700);
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-wizard-next {
+  padding: 11px 26px;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.btn-wizard-next:hover {
+  background: #0369a1;
+}
+
+@media (max-width: 860px) {
+  .wizard-card-container {
+    grid-template-columns: 1fr;
+  }
+  .wizard-stepper-sidebar {
+    padding: 1.5rem;
+    border-right: none;
+    border-bottom: 1px solid var(--slate-200);
+  }
+  .wizard-form-content {
+    padding: 2rem 1.5rem;
+  }
+}

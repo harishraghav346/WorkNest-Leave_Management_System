@@ -1,0 +1,481 @@
+/* ==========================================================================
+   HR LEAVE TRACKER - EMPLOYEE SELF-SERVICE PORTAL (REFERENCE IMAGE 5)
+   ========================================================================== */
+
+.ess-portal-container {
+  padding: 2.5rem 2rem 5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.ess-portal-header {
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.ess-portal-title {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.ess-portal-subtitle {
+  color: var(--slate-500);
+  font-size: 0.95rem;
+  margin-top: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   Top Dashboard Grid (Personal Info, Announcements, Balances, Attendance)
+   -------------------------------------------------------------------------- */
+.ess-layout-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+  .ess-layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Personal Information Card */
+.personal-info-card {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 20px;
+  padding: 2.25rem 2rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.personal-info-card-header {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin-bottom: 1.5rem;
+}
+
+.personal-info-body {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 24px;
+  align-items: center;
+}
+
+@media (max-width: 600px) {
+  .personal-info-body {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+}
+
+.profile-avatar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-avatar-img {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #f1f5f9;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.btn-view-profile-orange {
+  background: #ea580c;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 24px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-view-profile-orange:hover {
+  background: #c2410c;
+  transform: translateY(-1px);
+}
+
+.personal-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-line-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.92rem;
+  color: var(--slate-700);
+}
+
+.detail-icon {
+  color: #0284c7;
+  font-size: 1rem;
+  width: 20px;
+  text-align: center;
+}
+
+.detail-line-item strong {
+  color: var(--slate-900);
+}
+
+/* Announcements Card */
+.announcements-card {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 20px;
+  padding: 1.75rem 2rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.announcements-card-header {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin-bottom: 1rem;
+}
+
+.author-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.author-avatar-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e2e8f0;
+}
+
+.author-info-text h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0d9488;
+  margin: 0;
+}
+
+.author-info-text span {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.announcement-body-text {
+  font-size: 0.92rem;
+  color: var(--slate-600);
+  line-height: 1.6;
+  margin-bottom: 1.25rem;
+}
+
+/* Floating Emoji Reactions Bar (Image 5) */
+.emoji-reactions-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.reaction-emoji-btn {
+  background: none;
+  border: none;
+  font-size: 1.35rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: transform 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reaction-emoji-btn:hover {
+  transform: scale(1.25);
+}
+
+.reaction-counter {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--slate-600);
+}
+
+/* --------------------------------------------------------------------------
+   Leave Balance Card & Attendance
+   -------------------------------------------------------------------------- */
+.ess-secondary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .ess-secondary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.leave-balance-card {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 20px;
+  padding: 1.75rem 2rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.balance-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.balance-card-header h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin: 0;
+}
+
+.view-all-link {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #ea580c;
+  text-decoration: none;
+}
+
+.view-all-link:hover {
+  text-decoration: underline;
+}
+
+.balance-boxes-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .balance-boxes-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.balance-mini-box {
+  background: #f8fafc;
+  border: 1px solid var(--slate-200);
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.balance-mini-box-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--slate-600);
+}
+
+.balance-mini-icon {
+  font-size: 1.25rem;
+  margin: 2px 0;
+}
+
+.balance-mini-box-val {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--slate-900);
+}
+
+.balance-mini-box-sub {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+/* My Attendance Card */
+.attendance-card {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 20px;
+  padding: 1.75rem 2rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.attendance-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.attendance-card-header h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin: 0;
+}
+
+.attendance-radio-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.attendance-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--slate-700);
+  cursor: pointer;
+}
+
+.timeline-track-container {
+  margin: 1.5rem 0;
+  position: relative;
+}
+
+.timeline-line {
+  height: 3px;
+  background: #e2e8f0;
+  position: relative;
+  margin-top: 10px;
+}
+
+.timeline-marker-dots {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  top: -8px;
+}
+
+.timeline-marker-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #0284c7;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px #0284c7;
+}
+
+.timeline-marker-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 0.74rem;
+  color: var(--slate-500);
+  font-weight: 600;
+}
+
+.attendance-stat-chips-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 1.5rem;
+}
+
+.att-stat-chip {
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.att-stat-chip.total-in {
+  background: #ecfeff;
+  border: 1px solid #cffafe;
+  color: #0891b2;
+}
+
+.att-stat-chip.late-by {
+  background: #fff7ed;
+  border: 1px solid #ffedd5;
+  color: #c2410c;
+}
+
+.att-stat-text h5 {
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.att-stat-text p {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 2px 0 0 0;
+}
+
+/* --------------------------------------------------------------------------
+   Leave Requests Table Card (Image 5)
+   -------------------------------------------------------------------------- */
+.leave-requests-card {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.requests-card-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  margin-bottom: 1.25rem;
+}
+
+.requests-custom-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.requests-custom-table th {
+  padding: 12px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-500);
+  text-align: left;
+  border-bottom: 1px solid var(--slate-200);
+  background: #f8fafc;
+}
+
+.requests-custom-table td {
+  padding: 14px;
+  font-size: 0.88rem;
+  color: var(--slate-700);
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.status-dot-active {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  margin-right: 6px;
+}

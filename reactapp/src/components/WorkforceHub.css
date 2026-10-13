@@ -1,0 +1,149 @@
+/* ==========================================================================
+   HR LEAVE TRACKER - UNIFIED WORKFORCE MANAGEMENT (REFERENCE IMAGE 2)
+   ========================================================================== */
+
+.workforce-hub-page {
+  padding: 2.5rem 2rem 5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.workforce-header-area {
+  margin-bottom: 2.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.workforce-title {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.workforce-subtitle {
+  color: var(--slate-500);
+  font-size: 0.95rem;
+  margin-top: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   8-Card Pastel Feature Grid (Exact Reference Image 2)
+   -------------------------------------------------------------------------- */
+.workforce-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 1200px) {
+  .workforce-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .workforce-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workforce-card {
+  border-radius: 20px;
+  padding: 3rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+  min-height: 220px;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+}
+
+.workforce-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* Specific Pastel Background Themes (Matching Image 2) */
+.workforce-card.pastel-blue {
+  background: #f0f7ff;
+  border-color: #e0eeff;
+}
+
+.workforce-card.pastel-green {
+  background: #f0fdf4;
+  border-color: #dcfce7;
+}
+
+.workforce-card.pastel-peach {
+  background: #fffbeb;
+  border-color: #fef3c7;
+}
+
+.workforce-card.pastel-pink {
+  background: #fff1f2;
+  border-color: #ffe4e6;
+}
+
+.workforce-card.pastel-yellow {
+  background: #fefce8;
+  border-color: #fef9c3;
+}
+
+.workforce-card.pastel-rose {
+  background: #fdf2f8;
+  border-color: #fce7f3;
+}
+
+.workforce-card.pastel-cyan {
+  background: #f0fdfa;
+  border-color: #ccfbf1;
+}
+
+.workforce-card.pastel-mint {
+  background: #f0fdf4;
+  border-color: #dcfce7;
+}
+
+/* Illustration Box */
+.workforce-icon-illustration {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.04);
+  transition: transform 0.25s ease;
+}
+
+.workforce-card:hover .workforce-icon-illustration {
+  transform: scale(1.1);
+}
+
+.workforce-card-title {
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  margin: 0;
+  line-height: 1.35;
+}
+
+.workforce-card-desc {
+  font-size: 0.82rem;
+  color: var(--slate-500);
+  margin-top: 8px;
+  line-height: 1.4;
+}

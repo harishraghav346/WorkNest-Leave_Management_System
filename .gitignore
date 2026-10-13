@@ -1,0 +1,40 @@
+# React / Node
+node_modules/
+reactapp/node_modules/
+reactapp/build/
+reactapp/dist/
+npm-debug.log*
+
+# Java / Maven / Spring Boot
+springapp/target/
+*.class
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+application-local.properties
+application-secret.properties
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Logs
+*.log
+logs/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# H2 database files
+data/
+*.mv.db
+*.trace.db
+
+# Temporary files
+*.tmp
+*.bak

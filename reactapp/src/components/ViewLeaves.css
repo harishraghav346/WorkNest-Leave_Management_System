@@ -1,0 +1,307 @@
+/* ==========================================================================
+   HR LEAVE TRACKER - MODERN VIEW LEAVES & LEAVE HISTORY STYLES
+   ========================================================================== */
+
+.view-leaves-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 5rem;
+  min-height: calc(100vh - 75px);
+}
+
+.view-leaves-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.view-leaves-title {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.view-leaves-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-add-leave {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: var(--primary-600);
+  color: #ffffff;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-add-leave:hover {
+  background: var(--primary-700);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+}
+
+/* Quota Tracker Banner */
+.quota-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 2rem;
+}
+
+.quota-mini-card {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.quota-mini-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.quota-mini-val {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--slate-900);
+}
+
+/* Filter Bar */
+.leaves-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2rem;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.filter-pill-btn {
+  padding: 8px 16px;
+  border-radius: 9999px;
+  border: 1px solid var(--slate-200);
+  background: #ffffff;
+  color: var(--slate-600);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.filter-pill-btn:hover {
+  background: var(--slate-100);
+  color: var(--slate-900);
+}
+
+.filter-pill-btn.active {
+  background: var(--slate-900);
+  border-color: var(--slate-900);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+}
+
+/* Leaves Cards Grid */
+.leaves-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 24px;
+}
+
+.leave-card {
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+  border-radius: 18px;
+  box-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.leave-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 16px 28px -6px rgba(99, 102, 241, 0.1);
+}
+
+.leave-card-header {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--slate-100);
+  background: var(--slate-50);
+}
+
+.leave-type-tag {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary-600);
+}
+
+.leave-card-body {
+  padding: 1.5rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.leave-employee-label {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--slate-900);
+  margin: 0;
+}
+
+.leave-dates-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: var(--slate-600);
+  font-weight: 500;
+}
+
+.leave-reason-text {
+  font-size: 0.9rem;
+  color: var(--slate-600);
+  line-height: 1.5;
+  background: var(--slate-50);
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--slate-200);
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-transform: capitalize;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.status-approved {
+  background: #d1fae5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.status-rejected {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+/* Card Footer Actions */
+.leave-card-footer {
+  padding: 1rem 1.5rem;
+  background: #ffffff;
+  border-top: 1px solid var(--slate-100);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.btn-edit {
+  background: var(--slate-100);
+  color: var(--slate-700);
+}
+
+.btn-edit:hover {
+  background: var(--slate-200);
+  color: var(--slate-900);
+}
+
+.btn-delete {
+  background: #ffffff;
+  border-color: #fee2e2;
+  color: #ef4444;
+}
+
+.btn-delete:hover {
+  background: #fef2f2;
+}
+
+.btn-ooo-ai {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: var(--primary-700);
+}
+
+.btn-ooo-ai:hover {
+  background: var(--primary-600);
+  color: #ffffff;
+}
+
+/* Empty State */
+.no-leaves-container {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #ffffff;
+  border: 2px dashed var(--slate-300);
+  border-radius: 20px;
+  margin-top: 2rem;
+}
+
+.no-leaves-container h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  margin-bottom: 8px;
+}
+
+.no-leaves-container p {
+  color: var(--slate-500);
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+}

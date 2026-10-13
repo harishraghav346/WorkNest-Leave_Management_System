@@ -1,0 +1,19 @@
+/* ==========================================================================
+   HR LEAVE TRACKER - APP ROOT LAYOUT STYLES
+   ========================================================================== */
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-main);
+}
+
+main {
+  flex-grow: 1;
+  width: 100%;
+}
+
+.fade-page {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
