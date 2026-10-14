@@ -5,10 +5,8 @@ import com.examly.springapp.model.Leave;
 import com.examly.springapp.model.LeaveAuditEvent;
 import com.examly.springapp.model.User;
 import com.examly.springapp.repository.LeaveAuditEventRepository;
-import com.examly.springapp.repository.LeaveRepository;
 import com.examly.springapp.repository.UserRepository;
 import com.examly.springapp.service.LeaveService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,9 +37,6 @@ public class WorkNestProductionHardeningAndAuditTests {
     private UserRepository userRepository;
 
     @Autowired
-    private LeaveRepository leaveRepository;
-
-    @Autowired
     private LeaveAuditEventRepository auditEventRepository;
 
     @Autowired
@@ -52,9 +47,6 @@ public class WorkNestProductionHardeningAndAuditTests {
 
     @Autowired
     private JwtUtil jwtUtil;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     private String adminToken;
     private String employeeToken;
