@@ -169,11 +169,11 @@ public class WorkNestSecurityAndBalanceTests {
         testEmp.setLeaveBalance(20);
         userRepository.save(testEmp);
 
-        // 3-day leave: Nov 1 to Nov 3 (inclusive: Nov 1, Nov 2, Nov 3 = 3 days)
+        // 3-day leave: Nov 2 to Nov 4 (Monday through Wednesday = 3 working days)
         Leave leave = new Leave();
         leave.setEmployeeName(empUsername);
-        leave.setStartDate("2026-11-01");
-        leave.setEndDate("2026-11-03");
+        leave.setStartDate("2026-11-02");
+        leave.setEndDate("2026-11-04");
         leave.setReason("Family function");
         leave.setStatus("Pending");
         Leave savedLeave = leaveRepository.save(leave);
@@ -199,8 +199,8 @@ public class WorkNestSecurityAndBalanceTests {
 
         Leave leave = new Leave();
         leave.setEmployeeName(empUsername);
-        leave.setStartDate("2026-11-01");
-        leave.setEndDate("2026-11-02"); // 2 days
+        leave.setStartDate("2026-11-02");
+        leave.setEndDate("2026-11-03"); // 2 working days
         leave.setReason("Medical checkup");
         leave.setStatus("Pending");
         Leave savedLeave = leaveRepository.save(leave);
@@ -390,11 +390,11 @@ public class WorkNestSecurityAndBalanceTests {
 
         String userToken = jwtUtil.generateToken(empUsername, "employee");
 
-        // Create and approve a 3-day leave
+        // Create and approve a 3-day leave (Mon Nov 2 to Wed Nov 4)
         Leave leave = new Leave();
         leave.setEmployeeName(empUsername);
-        leave.setStartDate("2026-11-01");
-        leave.setEndDate("2026-11-03"); // 3 days
+        leave.setStartDate("2026-11-02");
+        leave.setEndDate("2026-11-04"); // 3 working days
         leave.setStatus("Pending");
         Leave savedLeave = leaveRepository.save(leave);
 
@@ -493,8 +493,8 @@ public class WorkNestSecurityAndBalanceTests {
 
         Leave leave = new Leave();
         leave.setEmployeeName(empUsername);
-        leave.setStartDate("2026-11-12");
-        leave.setEndDate("2026-11-14"); // 3 days
+        leave.setStartDate("2026-11-11");
+        leave.setEndDate("2026-11-13"); // 3 working days (Wed-Fri)
         leave.setStatus("Pending");
         Leave savedLeave = leaveRepository.save(leave);
 
@@ -618,8 +618,8 @@ public class WorkNestSecurityAndBalanceTests {
 
         Leave leave = new Leave();
         leave.setEmployeeName(empUsername);
-        leave.setStartDate("2026-11-28");
-        leave.setEndDate("2026-11-30"); // 3 days
+        leave.setStartDate("2026-11-23");
+        leave.setEndDate("2026-11-25"); // 3 working days (Mon-Wed)
         leave.setStatus("Pending");
         Leave savedLeave = leaveRepository.save(leave);
 
@@ -785,8 +785,8 @@ public class WorkNestSecurityAndBalanceTests {
 
         Leave leave = new Leave();
         leave.setEmployeeName(empUsername);
-        leave.setStartDate("2026-12-20");
-        leave.setEndDate("2026-12-22"); // 3 days
+        leave.setStartDate("2026-12-21");
+        leave.setEndDate("2026-12-23"); // 3 working days (Mon-Wed)
         leave.setStatus("Pending");
         Leave savedLeave = leaveRepository.save(leave);
 

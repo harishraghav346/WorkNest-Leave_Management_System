@@ -5,6 +5,7 @@ import com.examly.springapp.model.Leave;
 import com.examly.springapp.model.LeaveAuditEvent;
 import com.examly.springapp.model.User;
 import com.examly.springapp.repository.LeaveAuditEventRepository;
+import com.examly.springapp.repository.LeaveRepository;
 import com.examly.springapp.repository.UserRepository;
 import com.examly.springapp.service.LeaveService;
 import com.examly.springapp.config.DataInitializer;
@@ -17,6 +18,7 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -42,10 +44,16 @@ public class WorkNestProductionHardeningAndAuditTests {
     private UserRepository userRepository;
 
     @Autowired
+    private LeaveRepository leaveRepository;
+
+    @Autowired
     private LeaveAuditEventRepository auditEventRepository;
 
     @Autowired
     private LeaveService leaveService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -394,8 +402,8 @@ public class WorkNestProductionHardeningAndAuditTests {
     void testLeaveCreationCreatesAuditEvent() {
         Leave leave = new Leave();
         leave.setEmployeeName(testEmpUsername);
-        leave.setStartDate("2026-11-01");
-        leave.setEndDate("2026-11-03");
+        leave.setStartDate("2026-11-02");
+        leave.setEndDate("2026-11-04");
         leave.setReason("Annual conference");
         leave.setLeaveType("Annual Leave");
 
@@ -474,8 +482,8 @@ public class WorkNestProductionHardeningAndAuditTests {
     void testCancelApprovedLeaveRefundsBalanceAndRecordsAudit() {
         Leave leave = new Leave();
         leave.setEmployeeName(testEmpUsername);
-        leave.setStartDate("2026-11-15");
-        leave.setEndDate("2026-11-17"); // 3 days
+        leave.setStartDate("2026-11-16");
+        leave.setEndDate("2026-11-18"); // 3 working days (Mon-Wed)
         leave.setReason("Family event");
         leave.setLeaveType("Casual Leave");
         Leave created = leaveService.createLeave(leave);
@@ -584,8 +592,8 @@ public class WorkNestProductionHardeningAndAuditTests {
     void testAdminCanRetrieveAuditHistory() throws Exception {
         Leave leave = new Leave();
         leave.setEmployeeName(testEmpUsername);
-        leave.setStartDate("2026-12-05");
-        leave.setEndDate("2026-12-06");
+        leave.setStartDate("2026-12-07");
+        leave.setEndDate("2026-12-08"); // 2 working days (Mon-Tue)
         Leave created = leaveService.createLeave(leave);
 
         mockMvc.perform(get("/leaves/" + created.getId() + "/audit")
@@ -615,5 +623,242 @@ public class WorkNestProductionHardeningAndAuditTests {
     void testAnonymousUnauthorizedFromAuditEndpoint() throws Exception {
         mockMvc.perform(get("/leaves/1/audit"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // =========================================================================
+    // PHASE A1: WORKING-DAY CALCULATION TESTS (TASK 4)
+    // =========================================================================
+
+    @Test
+    @DisplayName("4.1: Monday through Friday produces exactly 5 working days")
+    void testMondayThroughFridayIsFiveWorkingDays() {
+        java.time.LocalDate monday = java.time.LocalDate.of(2026, 11, 2);
+        java.time.LocalDate friday = java.time.LocalDate.of(2026, 11, 6);
+        int workDays = leaveService.calculateWorkingDays(monday, friday);
+        assertEquals(5, workDays, "Monday through Friday must be exactly 5 working days");
+
+        Leave leave = new Leave();
+        leave.setEmployeeName(testEmpUsername);
+        leave.setStartDate("2026-11-02");
+        leave.setEndDate("2026-11-06");
+        leave.setReason("Sprint work week");
+        leave.setLeaveType("Annual Leave");
+        Leave created = leaveService.createLeave(leave);
+
+        assertEquals(5, created.getDaysCount(), "Stored daysCount on created leave must be 5");
+    }
+
+    @Test
+    @DisplayName("4.2: Friday through Monday produces exactly 2 working days")
+    void testFridayThroughMondayIsTwoWorkingDays() {
+        java.time.LocalDate friday = java.time.LocalDate.of(2026, 11, 6);
+        java.time.LocalDate monday = java.time.LocalDate.of(2026, 11, 9);
+        int workDays = leaveService.calculateWorkingDays(friday, monday);
+        assertEquals(2, workDays, "Friday through Monday must be exactly 2 working days (excluding Sat and Sun)");
+
+        Leave leave = new Leave();
+        leave.setEmployeeName(testEmpUsername);
+        leave.setStartDate("2026-11-06");
+        leave.setEndDate("2026-11-09");
+        leave.setReason("Long weekend");
+        leave.setLeaveType("Casual Leave");
+        Leave created = leaveService.createLeave(leave);
+
+        assertEquals(2, created.getDaysCount(), "Stored daysCount must be 2 working days");
+    }
+
+    @Test
+    @DisplayName("4.3: Saturday through Sunday produces 0 working days and request is rejected")
+    void testSaturdayThroughSundayZeroWorkingDaysRejected() throws Exception {
+        java.time.LocalDate saturday = java.time.LocalDate.of(2026, 11, 7);
+        java.time.LocalDate sunday = java.time.LocalDate.of(2026, 11, 8);
+        int workDays = leaveService.calculateWorkingDays(saturday, sunday);
+        assertEquals(0, workDays, "Saturday through Sunday contains 0 working days");
+
+        Leave leave = new Leave();
+        leave.setEmployeeName(testEmpUsername);
+        leave.setStartDate("2026-11-07");
+        leave.setEndDate("2026-11-08");
+        leave.setReason("Weekend only");
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> {
+            leaveService.createLeave(leave);
+        });
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("0 working days"), "Exception reason must mention 0 working days");
+
+        // Also verify via HTTP POST /leaves
+        String payload = objectMapper.writeValueAsString(leave);
+        mockMvc.perform(post("/leaves")
+                .header("Authorization", employeeToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("4.4: Monday through Wednesday produces exactly 3 working days")
+    void testMondayThroughWednesdayIsThreeWorkingDays() {
+        java.time.LocalDate monday = java.time.LocalDate.of(2026, 11, 2);
+        java.time.LocalDate wednesday = java.time.LocalDate.of(2026, 11, 4);
+        int workDays = leaveService.calculateWorkingDays(monday, wednesday);
+        assertEquals(3, workDays, "Monday through Wednesday must be 3 working days");
+
+        Leave leave = new Leave();
+        leave.setEmployeeName(testEmpUsername);
+        leave.setStartDate("2026-11-02");
+        leave.setEndDate("2026-11-04");
+        leave.setReason("Midweek break");
+        Leave created = leaveService.createLeave(leave);
+
+        assertEquals(3, created.getDaysCount(), "Stored daysCount must be 3");
+    }
+
+    @Test
+    @DisplayName("4.5: Range containing a weekend and several weekdays calculates correctly")
+    void testRangeContainingWeekendAndSeveralWeekdays() {
+        // Wednesday Nov 4, 2026 through Thursday Nov 12, 2026:
+        // Wed 4, Thu 5, Fri 6, Sat 7 (weekend), Sun 8 (weekend), Mon 9, Tue 10, Wed 11, Thu 12
+        // Total working days = 7
+        java.time.LocalDate wed = java.time.LocalDate.of(2026, 11, 4);
+        java.time.LocalDate nextThu = java.time.LocalDate.of(2026, 11, 12);
+        int workDays = leaveService.calculateWorkingDays(wed, nextThu);
+        assertEquals(7, workDays, "Wed through next Thu must be exactly 7 working days (excluding weekend)");
+
+        Leave leave = new Leave();
+        leave.setEmployeeName(testEmpUsername);
+        leave.setStartDate("2026-11-04");
+        leave.setEndDate("2026-11-12");
+        leave.setReason("Multi-week project break");
+        Leave created = leaveService.createLeave(leave);
+
+        assertEquals(7, created.getDaysCount(), "Stored daysCount must be 7");
+    }
+
+    @Test
+    @DisplayName("4.6: Invalid date ranges are rejected with BAD_REQUEST")
+    void testInvalidDateRangesRejected() {
+        // Inverted range (end before start)
+        java.time.LocalDate start = java.time.LocalDate.of(2026, 11, 10);
+        java.time.LocalDate end = java.time.LocalDate.of(2026, 11, 5);
+        ResponseStatusException exInverted = assertThrows(ResponseStatusException.class, () -> {
+            leaveService.calculateWorkingDays(start, end);
+        });
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, exInverted.getStatusCode());
+
+        // Range exceeding 366 calendar days
+        java.time.LocalDate yearStart = java.time.LocalDate.of(2026, 1, 1);
+        java.time.LocalDate yearEnd = java.time.LocalDate.of(2027, 2, 1);
+        ResponseStatusException exTooLarge = assertThrows(ResponseStatusException.class, () -> {
+            leaveService.calculateWorkingDays(yearStart, yearEnd);
+        });
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, exTooLarge.getStatusCode());
+
+        // Malformed date strings via calculateDays
+        ResponseStatusException exMalformed = assertThrows(ResponseStatusException.class, () -> {
+            leaveService.calculateDays("invalid-date", "2026-11-05", 1);
+        });
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, exMalformed.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("4.7: Correct balance deduction after approval of working-day leave")
+    void testCorrectBalanceDeductionAfterApproval() {
+        String testUser = "weekday_deduct_" + System.currentTimeMillis();
+        User u = new User(testUser, passwordEncoder.encode("pass123"), "employee");
+        u.setLeaveBalance(20);
+        userRepository.save(u);
+
+        // Friday Nov 6 to Monday Nov 9 = 2 working days
+        Leave leave = new Leave();
+        leave.setEmployeeName(testUser);
+        leave.setStartDate("2026-11-06");
+        leave.setEndDate("2026-11-09");
+        leave.setReason("Weekend trip");
+        leave.setLeaveType("Casual Leave");
+        Leave created = leaveService.createLeave(leave);
+        assertEquals(2, created.getDaysCount());
+
+        leaveService.approveLeave(created.getId(), "admin");
+
+        User updatedUser = userRepository.findByUsername(testUser);
+        assertEquals(18, updatedUser.getLeaveBalance(), "Balance must be reduced from 20 to 18 (2 working days deducted)");
+    }
+
+    @Test
+    @DisplayName("4.8: Correct refund when an approved request is cancelled")
+    void testCorrectRefundWhenApprovedRequestIsCancelled() {
+        String testUser = "weekday_refund_" + System.currentTimeMillis();
+        User u = new User(testUser, passwordEncoder.encode("pass123"), "employee");
+        u.setLeaveBalance(20);
+        userRepository.save(u);
+
+        // Friday Nov 6 to Monday Nov 9 = 2 working days
+        Leave leave = new Leave();
+        leave.setEmployeeName(testUser);
+        leave.setStartDate("2026-11-06");
+        leave.setEndDate("2026-11-09");
+        Leave created = leaveService.createLeave(leave);
+        leaveService.approveLeave(created.getId(), "admin");
+
+        User userAfterApprove = userRepository.findByUsername(testUser);
+        assertEquals(18, userAfterApprove.getLeaveBalance());
+
+        leaveService.cancelLeave(created.getId(), testUser);
+
+        User userAfterCancel = userRepository.findByUsername(testUser);
+        assertEquals(20, userAfterCancel.getLeaveBalance(), "Balance must be restored back to 20 (+2 refund)");
+    }
+
+    @Test
+    @DisplayName("4.9: Pending cancellation does not modify balance")
+    void testPendingCancellationDoesNotModifyBalance() {
+        String testUser = "weekday_pending_" + System.currentTimeMillis();
+        User u = new User(testUser, passwordEncoder.encode("pass123"), "employee");
+        u.setLeaveBalance(20);
+        userRepository.save(u);
+
+        Leave leave = new Leave();
+        leave.setEmployeeName(testUser);
+        leave.setStartDate("2026-11-02");
+        leave.setEndDate("2026-11-04"); // 3 working days
+        Leave created = leaveService.createLeave(leave);
+
+        leaveService.cancelLeave(created.getId(), testUser);
+
+        User userAfterCancel = userRepository.findByUsername(testUser);
+        assertEquals(20, userAfterCancel.getLeaveBalance(), "Pending leave cancellation must not alter balance");
+    }
+
+    @Test
+    @DisplayName("4.10: Existing historical duration is preserved and not silently rewritten on refund")
+    void testHistoricalDurationNotSilentlyRewrittenOnRefund() {
+        String testUser = "historical_user_" + System.currentTimeMillis();
+        User u = new User(testUser, passwordEncoder.encode("pass123"), "employee");
+        // Simulate historical state: employee had 20, was previously deducted 4 calendar days (Fri-Mon), balance is 16
+        u.setLeaveBalance(16);
+        userRepository.save(u);
+
+        // Simulate an existing historical approved leave in the database where daysCount = 4
+        // (Friday Nov 6 to Monday Nov 9 was 4 calendar days under old system, but 2 working days under new system)
+        Leave historicalLeave = new Leave();
+        historicalLeave.setEmployeeName(testUser);
+        historicalLeave.setStartDate("2026-11-06");
+        historicalLeave.setEndDate("2026-11-09");
+        historicalLeave.setDaysCount(4); // Originally stored historical deduction
+        historicalLeave.setStatus("Approved");
+        historicalLeave.setApprovedBy("admin");
+        Leave savedHistorical = leaveRepository.save(historicalLeave);
+
+        // When cancelling this historical approved leave
+        leaveService.cancelLeave(savedHistorical.getId(), testUser);
+
+        // Verify: The refund must be exactly the 4 days originally deducted, restoring balance to 20!
+        User restoredUser = userRepository.findByUsername(testUser);
+        assertEquals(20, restoredUser.getLeaveBalance(), "Cancellation of historical leave must refund the originally deducted 4 days, not recalculated 2 days");
+
+        // Verify: The stored daysCount remains intact
+        Leave fresh = leaveRepository.findById(savedHistorical.getId()).orElseThrow();
+        assertEquals(4, fresh.getDaysCount(), "Historical daysCount must not be silently rewritten");
     }
 }
