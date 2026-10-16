@@ -104,8 +104,9 @@ public class SecurityConfig {
                 if (!finalIsProd) {
                     authorize.requestMatchers("/h2-console/**").permitAll();
                 }
-                authorize.requestMatchers(HttpMethod.GET, "/leaves/*/audit").hasRole("ADMIN");
-                authorize.requestMatchers(HttpMethod.PUT, "/leaves/*/approve", "/leaves/*/reject").hasRole("ADMIN");
+                authorize.requestMatchers(HttpMethod.GET, "/leaves/*/audit").hasAnyRole("ADMIN", "PLATFORM_ADMIN", "ORG_ADMIN", "HR_ADMIN");
+                authorize.requestMatchers(HttpMethod.PUT, "/leaves/*/approve", "/leaves/*/reject").hasAnyRole("ADMIN", "PLATFORM_ADMIN", "ORG_ADMIN", "HR_ADMIN", "MANAGER");
+                authorize.requestMatchers("/admin/**").hasAnyRole("ADMIN", "PLATFORM_ADMIN");
                 authorize.requestMatchers("/leaves/**", "/notifications/**", "/ai/**", "/auth/me").authenticated();
                 authorize.anyRequest().authenticated();
             })

@@ -27,6 +27,7 @@ import SelfServicePortal from "./components/SelfServicePortal";
 import WorkforceHub from "./components/WorkforceHub";
 import SecurityPrivacy from "./components/SecurityPrivacy";
 import OfficeOperations from "./components/OfficeOperations";
+import TeamCalendar from "./components/TeamCalendar";
 
 const App = () => {
   return (
@@ -80,6 +81,10 @@ const AppContent = () => {
             <Route
               path="/office-operations"
               element={<ProtectedRoute component={OfficeOperations} />}
+            />
+            <Route
+              path="/calendar"
+              element={<ProtectedRoute component={TeamCalendar} />}
             />
 
             {/* Existing Core Routes Preserved */}

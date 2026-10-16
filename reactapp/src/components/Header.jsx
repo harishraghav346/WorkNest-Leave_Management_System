@@ -78,6 +78,9 @@ const Header = () => {
         <NavLink to="/workforce-hub" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
           Workforce
         </NavLink>
+        <NavLink to="/calendar" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+          Calendar
+        </NavLink>
         {isAdmin() ? (
           <NavLink to="/admin/dashboard" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
             Admin Console

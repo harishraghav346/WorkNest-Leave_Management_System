@@ -17,6 +17,9 @@ public class LeaveAuditEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "organization_id")
+    private Long organizationId;
+
     @Column(nullable = false)
     private Long leaveId;
 
@@ -63,12 +66,36 @@ public class LeaveAuditEvent {
         this.details = details;
     }
 
+    public LeaveAuditEvent(Long organizationId, Long leaveId, String eventType, String actorUsername, String actorRole,
+                            Instant eventTimestamp, String fromStatus, String toStatus,
+                            Integer previousBalance, Integer newBalance, String details) {
+        this.organizationId = organizationId;
+        this.leaveId = leaveId;
+        this.eventType = eventType;
+        this.actorUsername = actorUsername;
+        this.actorRole = actorRole;
+        this.eventTimestamp = eventTimestamp;
+        this.fromStatus = fromStatus;
+        this.toStatus = toStatus;
+        this.previousBalance = previousBalance;
+        this.newBalance = newBalance;
+        this.details = details;
+    }
+
     public Long getId() {
         return id;
     }
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Long getOrganizationId() {
+        return organizationId;
+    }
+
+    public void setOrganizationId(Long organizationId) {
+        this.organizationId = organizationId;
     }
 
     public Long getLeaveId() {

@@ -861,4 +861,262 @@ public class WorkNestProductionHardeningAndAuditTests {
         Leave fresh = leaveRepository.findById(savedHistorical.getId()).orElseThrow();
         assertEquals(4, fresh.getDaysCount(), "Historical daysCount must not be silently rewritten");
     }
+
+    // =========================================================================
+    // PHASE B: TEAM AVAILABILITY CALENDAR TESTS
+    // =========================================================================
+
+    @Test
+    @DisplayName("5.1: Authenticated access to the calendar returns 200 OK")
+    void testAuthenticatedAccessToCalendar() throws Exception {
+        mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
+    @DisplayName("5.2: Unauthorized anonymous access to calendar is rejected (401)")
+    void testUnauthorizedAnonymousAccessToCalendarFails() throws Exception {
+        mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("5.3: Rejection of invalid date ranges in calendar endpoint")
+    void testCalendarRejectsInvalidDateRanges() throws Exception {
+        // 1. Inverted range (end before start)
+        mockMvc.perform(get("/leaves/calendar?start=2026-11-20&end=2026-11-10")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isBadRequest());
+
+        // 2. Missing parameters
+        mockMvc.perform(get("/leaves/calendar?start=2026-11-01")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isBadRequest());
+
+        // 3. Malformed date format
+        mockMvc.perform(get("/leaves/calendar?start=2026-invalid-01&end=2026-11-30")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isBadRequest());
+
+        // 4. Excessive range (> 93 calendar days)
+        mockMvc.perform(get("/leaves/calendar?start=2026-01-01&end=2026-05-01")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isBadRequest());
+    }
+
+    private boolean containsLeaveId(String json, Long id) throws Exception {
+        com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
+        if (root.isArray()) {
+            for (com.fasterxml.jackson.databind.JsonNode node : root) {
+                if (node.has("id") && node.get("id").asLong() == id) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Test
+    @DisplayName("5.4: Inclusion of leave overlapping the requested period, including starting before")
+    void testCalendarIncludesOverlappingLeaves() throws Exception {
+        String testUser = "overlap_user_" + System.currentTimeMillis();
+        User u = new User(testUser, passwordEncoder.encode("pass123"), "employee");
+        userRepository.save(u);
+
+        // Leave A: Starts BEFORE period and ends INSIDE period (Oct 28 to Nov 04)
+        Leave leaveA = new Leave();
+        leaveA.setEmployeeName(testUser);
+        leaveA.setStartDate("2026-10-28");
+        leaveA.setEndDate("2026-11-04");
+        leaveA.setStatus("Approved");
+        leaveA.setDaysCount(6);
+        leaveRepository.save(leaveA);
+
+        // Leave B: Starts and ends INSIDE period (Nov 10 to Nov 12)
+        Leave leaveB = new Leave();
+        leaveB.setEmployeeName(testUser);
+        leaveB.setStartDate("2026-11-10");
+        leaveB.setEndDate("2026-11-12");
+        leaveB.setStatus("Approved");
+        leaveB.setDaysCount(3);
+        leaveRepository.save(leaveB);
+
+        // Leave C: Starts INSIDE and ends AFTER period (Nov 26 to Dec 04)
+        Leave leaveC = new Leave();
+        leaveC.setEmployeeName(testUser);
+        leaveC.setStartDate("2026-11-26");
+        leaveC.setEndDate("2026-12-04");
+        leaveC.setStatus("Approved");
+        leaveC.setDaysCount(7);
+        leaveRepository.save(leaveC);
+
+        // Leave D: Strictly OUTSIDE period (Dec 10 to Dec 15)
+        Leave leaveD = new Leave();
+        leaveD.setEmployeeName(testUser);
+        leaveD.setStartDate("2026-12-10");
+        leaveD.setEndDate("2026-12-15");
+        leaveD.setStatus("Approved");
+        leaveD.setDaysCount(4);
+        leaveRepository.save(leaveD);
+
+        String json = mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // Verify Leave A, B, and C are included, but Leave D is not
+        assertTrue(containsLeaveId(json, leaveA.getId()), "Leave starting before period must be included");
+        assertTrue(containsLeaveId(json, leaveB.getId()), "Leave inside period must be included");
+        assertTrue(containsLeaveId(json, leaveC.getId()), "Leave ending after period must be included");
+        assertFalse(containsLeaveId(json, leaveD.getId()), "Leave strictly outside period must be excluded");
+    }
+
+    @Test
+    @DisplayName("5.5: Exclusion of rejected and cancelled leave from availability views")
+    void testCalendarExcludesRejectedAndCancelledLeaves() throws Exception {
+        String testUser = "excluded_user_" + System.currentTimeMillis();
+        User u = new User(testUser, passwordEncoder.encode("pass123"), "employee");
+        userRepository.save(u);
+
+        // Rejected Leave
+        Leave rejectedLeave = new Leave();
+        rejectedLeave.setEmployeeName(testUser);
+        rejectedLeave.setStartDate("2026-11-02");
+        rejectedLeave.setEndDate("2026-11-04");
+        rejectedLeave.setStatus("Rejected");
+        rejectedLeave.setDaysCount(3);
+        Leave savedRejected = leaveRepository.save(rejectedLeave);
+
+        // Cancelled Leave
+        Leave cancelledLeave = new Leave();
+        cancelledLeave.setEmployeeName(testUser);
+        cancelledLeave.setStartDate("2026-11-09");
+        cancelledLeave.setEndDate("2026-11-11");
+        cancelledLeave.setStatus("Cancelled");
+        cancelledLeave.setDaysCount(3);
+        Leave savedCancelled = leaveRepository.save(cancelledLeave);
+
+        String json = mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertFalse(containsLeaveId(json, savedRejected.getId()), "Rejected leaves must be excluded from calendar");
+        assertFalse(containsLeaveId(json, savedCancelled.getId()), "Cancelled leaves must be excluded from calendar");
+    }
+
+    @Test
+    @DisplayName("5.6: Explicitly defined handling of pending leave (privacy & role-based visibility)")
+    void testCalendarPendingLeavePrivacyHandling() throws Exception {
+        String colleague = "colleague_user_" + System.currentTimeMillis();
+        User colleagueUser = new User(colleague, passwordEncoder.encode("pass123"), "employee");
+        userRepository.save(colleagueUser);
+
+        // Colleague's Pending request
+        Leave colleaguePending = new Leave();
+        colleaguePending.setEmployeeName(colleague);
+        colleaguePending.setStartDate("2026-11-16");
+        colleaguePending.setEndDate("2026-11-18");
+        colleaguePending.setStatus("Pending");
+        colleaguePending.setDaysCount(3);
+        Leave savedColleaguePending = leaveRepository.save(colleaguePending);
+
+        // Current employee's OWN Pending request
+        Leave ownPending = new Leave();
+        ownPending.setEmployeeName(testEmpUsername);
+        ownPending.setStartDate("2026-11-23");
+        ownPending.setEndDate("2026-11-25");
+        ownPending.setStatus("Pending");
+        ownPending.setDaysCount(3);
+        Leave savedOwnPending = leaveRepository.save(ownPending);
+
+        // 1. When viewed by standard employee:
+        String employeeJson = mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertTrue(containsLeaveId(employeeJson, savedOwnPending.getId()), "Employee must see their OWN pending leave on calendar");
+        assertFalse(containsLeaveId(employeeJson, savedColleaguePending.getId()), "Employee must NOT see a colleague's pending leave");
+
+        // 2. When viewed by admin:
+        String adminJson = mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30")
+                .header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertTrue(containsLeaveId(adminJson, savedColleaguePending.getId()), "Admin must see colleague's pending leave for planning");
+        assertTrue(containsLeaveId(adminJson, savedOwnPending.getId()), "Admin must see employee's pending leave");
+    }
+
+    @Test
+    @DisplayName("5.7: Absence of leave reasons and sensitive fields in serialized calendar responses")
+    void testCalendarOmitsReasonsAndSensitiveFields() throws Exception {
+        String testUser = "privacy_user_" + System.currentTimeMillis();
+        User u = new User(testUser, passwordEncoder.encode("pass123"), "employee");
+        userRepository.save(u);
+
+        Leave sensitiveLeave = new Leave();
+        sensitiveLeave.setEmployeeName(testUser);
+        sensitiveLeave.setStartDate("2026-11-02");
+        sensitiveLeave.setEndDate("2026-11-04");
+        sensitiveLeave.setStatus("Approved");
+        sensitiveLeave.setDaysCount(3);
+        sensitiveLeave.setReason("Confidential medical biopsy and personal treatment plan");
+        sensitiveLeave.setRejectionReason("Not applicable");
+        sensitiveLeave.setAiRecommendation("AI recommendation summary with confidential risk factors");
+        sensitiveLeave.setImpactScore("High");
+        Leave saved = leaveRepository.save(sensitiveLeave);
+
+        String json = mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertTrue(containsLeaveId(json, saved.getId()));
+        assertTrue(json.contains("Out of Office"), "Display label should be Out of Office");
+        assertFalse(json.contains("Confidential medical biopsy"), "Private reason must NEVER be returned in calendar DTO");
+        assertFalse(json.contains("confidential risk factors"), "AI recommendation must NEVER be returned in calendar DTO");
+        assertFalse(json.contains("\"reason\":"), "JSON must not contain a 'reason' field");
+        assertFalse(json.contains("\"rejectionReason\":"), "JSON must not contain a 'rejectionReason' field");
+        assertFalse(json.contains("\"aiRecommendation\":"), "JSON must not contain an 'aiRecommendation' field");
+    }
+
+    @Test
+    @DisplayName("5.8: Empty calendar results return empty JSON array (200 OK)")
+    void testCalendarEmptyResultsWhenNoAbsences() throws Exception {
+        mockMvc.perform(get("/leaves/calendar?start=2029-06-01&end=2029-06-30")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    @DisplayName("5.9: Correct use of stored daysCount in calendar response")
+    void testCalendarUsesStoredDaysCount() throws Exception {
+        String testUser = "dayscount_user_" + System.currentTimeMillis();
+        User u = new User(testUser, passwordEncoder.encode("pass123"), "employee");
+        userRepository.save(u);
+
+        Leave leave = new Leave();
+        leave.setEmployeeName(testUser);
+        leave.setStartDate("2026-11-02");
+        leave.setEndDate("2026-11-06");
+        leave.setDaysCount(5); // 5 working days
+        leave.setStatus("Approved");
+        Leave saved = leaveRepository.save(leave);
+
+        mockMvc.perform(get("/leaves/calendar?start=2026-11-01&end=2026-11-30")
+                .header("Authorization", employeeToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + saved.getId() + ")].daysCount").value(5));
+    }
 }

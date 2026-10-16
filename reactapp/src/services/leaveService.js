@@ -65,3 +65,13 @@ export const cancelLeave = (id) => {
         .then(handleResponse)
         .catch(handleError);
 };
+
+export const getTeamCalendar = (start, end, status) => {
+    let url = `/leaves/calendar?start=${start}&end=${end}`;
+    if (status) {
+        url += `&status=${encodeURIComponent(status)}`;
+    }
+    return apiClient.get(url)
+        .then(handleResponse)
+        .catch(handleError);
+};

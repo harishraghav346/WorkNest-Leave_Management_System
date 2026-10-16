@@ -8,7 +8,8 @@ import {
   FaThLarge, 
   FaTasks, 
   FaShieldAlt, 
-  FaUserTie 
+  FaUserTie,
+  FaCalendarAlt 
 } from "react-icons/fa";
 import { useAuth } from "./AuthContext";
 import "./Sidebar.css";
@@ -47,6 +48,15 @@ const Sidebar = () => {
         >
           <FaUmbrellaBeach className="sidebar-icon" />
           <span>Leave</span>
+        </NavLink>
+
+        <NavLink 
+          to="/calendar" 
+          className={({ isActive }) => `sidebar-nav-item ${isActive ? "active" : ""}`}
+          title="Team Availability Calendar"
+        >
+          <FaCalendarAlt className="sidebar-icon" />
+          <span>Calendar</span>
         </NavLink>
 
         <NavLink 

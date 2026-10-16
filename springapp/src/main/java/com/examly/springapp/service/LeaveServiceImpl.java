@@ -3,9 +3,13 @@ package com.examly.springapp.service;
 import com.examly.springapp.model.Leave;
 import com.examly.springapp.model.LeaveAuditEvent;
 import com.examly.springapp.model.LeaveAuditEventDTO;
+import com.examly.springapp.model.Organization;
+import com.examly.springapp.model.TeamCalendarLeaveDTO;
+import com.examly.springapp.model.TenantContext;
 import com.examly.springapp.model.User;
 import com.examly.springapp.repository.LeaveAuditEventRepository;
 import com.examly.springapp.repository.LeaveRepository;
+import com.examly.springapp.repository.OrganizationRepository;
 import com.examly.springapp.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -22,6 +26,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,6 +47,12 @@ public class LeaveServiceImpl implements LeaveService {
   @Autowired
   private NotificationService notificationService;
 
+  @Autowired
+  private TenantContextService tenantContextService;
+
+  @Autowired
+  private OrganizationRepository organizationRepository;
+
   @Override
   public Leave createLeave(Leave leave) {
     if (leave.getStatus() == null || leave.getStatus().isBlank()) {
@@ -56,8 +68,18 @@ public class LeaveServiceImpl implements LeaveService {
     }
     leave.setDaysCount(calculatedDays);
 
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    Long orgId = null;
+    if (contextOpt.isPresent()) {
+      TenantContext ctx = contextOpt.get();
+      orgId = ctx.getOrganizationId();
+      Organization org = organizationRepository.findById(orgId).orElse(null);
+      leave.setOrganization(org);
+    }
+
     Leave newLeave = leaveRepository.save(leave);
-    notificationService.createNotification("New leave request submitted by " + leave.getEmployeeName());
+    notificationService.createNotification(orgId, newLeave.getEmployeeName(), "New leave request submitted by " + leave.getEmployeeName());
 
     // Record persistent append-only audit event in the same transaction
     String actor = resolveActor(newLeave.getEmployeeName());
@@ -69,7 +91,7 @@ public class LeaveServiceImpl implements LeaveService {
         userBalance = u.getLeaveBalance();
       }
     }
-    recordAuditEvent(newLeave.getId(), "CREATED", actor, role, null, newLeave.getStatus(), userBalance, userBalance,
+    recordAuditEvent(orgId, newLeave.getId(), "CREATED", actor, role, null, newLeave.getStatus(), userBalance, userBalance,
         "Leave request created for " + newLeave.getDaysCount() + " day(s) (" + newLeave.getLeaveType() + ")");
 
     return newLeave;
@@ -78,13 +100,56 @@ public class LeaveServiceImpl implements LeaveService {
   @Override
   @Transactional(readOnly = true)
   public List<Leave> getAllLeave() {
-    return leaveRepository.findAll();
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    if (contextOpt.isPresent()) {
+      return leaveRepository.findByOrganizationId(contextOpt.get().getOrganizationId());
+    }
+    // Missing tenant context: fail closed against tenant data
+    if (auth != null && auth.getAuthorities() != null) {
+      boolean isPlatformAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN"));
+      if (isPlatformAdmin) {
+        return Collections.emptyList();
+      }
+      boolean isLegacyAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+      if (isLegacyAdmin) {
+        return leaveRepository.findByOrganizationIsNull();
+      }
+    }
+    return Collections.emptyList();
   }
 
   @Override
   @Transactional(readOnly = true)
   public Leave getLeaveById(Long id) {
-    return leaveRepository.findById(id).orElse(null);
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    Leave leave = leaveRepository.findById(id).orElse(null);
+    if (leave == null) {
+      return null;
+    }
+    if (contextOpt.isPresent()) {
+      TenantContext ctx = contextOpt.get();
+      if (leave.getOrganization() == null || !leave.getOrganization().getId().equals(ctx.getOrganizationId())) {
+        return null;
+      }
+    } else {
+      if (leave.getOrganization() != null) {
+        return null;
+      }
+      boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+          auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+      if (isPlatformAdmin) {
+        return null;
+      }
+      boolean isLegacyAdmin = (auth != null && auth.getAuthorities() != null &&
+          auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
+      boolean isOwner = (auth != null && leave.getEmployeeName() != null && leave.getEmployeeName().equalsIgnoreCase(auth.getName()));
+      if (!isLegacyAdmin && !isOwner) {
+        return null;
+      }
+    }
+    return leave;
   }
 
   @Override
@@ -92,6 +157,30 @@ public class LeaveServiceImpl implements LeaveService {
     Optional<Leave> existingLeave = leaveRepository.findById(id);
     if (existingLeave.isPresent()) {
       Leave l = existingLeave.get();
+      Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+      Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+      Long orgId = l.getOrganization() != null ? l.getOrganization().getId() : null;
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        if (l.getOrganization() == null || !l.getOrganization().getId().equals(ctx.getOrganizationId())) {
+          return null;
+        }
+      } else {
+        if (l.getOrganization() != null) {
+          return null;
+        }
+        boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+            auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+        if (isPlatformAdmin) {
+          return null;
+        }
+        boolean isLegacyAdmin = (auth != null && auth.getAuthorities() != null &&
+            auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
+        boolean isOwner = (auth != null && l.getEmployeeName() != null && l.getEmployeeName().equalsIgnoreCase(auth.getName()));
+        if (!isLegacyAdmin && !isOwner) {
+          return null;
+        }
+      }
       String previousStatus = l.getStatus();
       if (leave.getEmployeeName() != null && !leave.getEmployeeName().isBlank()) {
         l.setEmployeeName(leave.getEmployeeName());
@@ -127,12 +216,12 @@ public class LeaveServiceImpl implements LeaveService {
       }
       l.setDaysCount(calculatedDays);
       Leave updatedLeave = leaveRepository.save(l);
-      notificationService.createNotification("Leave request #" + id + " has been updated. Status: " + l.getStatus());
+      notificationService.createNotification(orgId, "Leave request #" + id + " has been updated. Status: " + l.getStatus());
 
       // Record update audit event
       String actor = resolveActor(l.getEmployeeName());
       String role = resolveActorRole(actor);
-      recordAuditEvent(l.getId(), "UPDATED", actor, role, previousStatus, l.getStatus(), null, null,
+      recordAuditEvent(orgId, l.getId(), "UPDATED", actor, role, previousStatus, l.getStatus(), null, null,
           "Leave request updated. Status: " + l.getStatus());
 
       return updatedLeave;
@@ -142,9 +231,35 @@ public class LeaveServiceImpl implements LeaveService {
 
   @Override
   public boolean deleteLeave(Long id) {
-    if (leaveRepository.existsById(id)) {
+    Optional<Leave> opt = leaveRepository.findById(id);
+    if (opt.isPresent()) {
+      Leave l = opt.get();
+      Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+      Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        if (l.getOrganization() == null || !l.getOrganization().getId().equals(ctx.getOrganizationId())) {
+          return false;
+        }
+      } else {
+        if (l.getOrganization() != null) {
+          return false;
+        }
+        boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+            auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+        if (isPlatformAdmin) {
+          return false;
+        }
+        boolean isLegacyAdmin = (auth != null && auth.getAuthorities() != null &&
+            auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
+        boolean isOwner = (auth != null && l.getEmployeeName() != null && l.getEmployeeName().equalsIgnoreCase(auth.getName()));
+        if (!isLegacyAdmin && !isOwner) {
+          return false;
+        }
+      }
       leaveRepository.deleteById(id);
-      notificationService.createNotification("Leave request #" + id + " has been deleted.");
+      Long orgId = l.getOrganization() != null ? l.getOrganization().getId() : null;
+      notificationService.createNotification(orgId, "Leave request #" + id + " has been deleted.");
       return true;
     }
     return false;
@@ -153,7 +268,22 @@ public class LeaveServiceImpl implements LeaveService {
   @Override
   @Transactional(readOnly = true)
   public Page<Leave> getLeavesPaginated(int page, int size) {
-    return leaveRepository.findAll(PageRequest.of(page, size));
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    if (contextOpt.isPresent()) {
+      return leaveRepository.findByOrganizationId(contextOpt.get().getOrganizationId(), PageRequest.of(page, size));
+    }
+    if (auth != null && auth.getAuthorities() != null) {
+      boolean isPlatformAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN"));
+      if (isPlatformAdmin) {
+        return Page.empty(PageRequest.of(page, size));
+      }
+      boolean isLegacyAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+      if (isLegacyAdmin) {
+        return leaveRepository.findByOrganizationIsNull(PageRequest.of(page, size));
+      }
+    }
+    return Page.empty(PageRequest.of(page, size));
   }
 
   @Override
@@ -169,14 +299,37 @@ public class LeaveServiceImpl implements LeaveService {
     Optional<Leave> existingLeave = leaveRepository.findById(id);
     if (existingLeave.isPresent()) {
       Leave leave = existingLeave.get();
+      Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+      Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+      Long orgId = leave.getOrganization() != null ? leave.getOrganization().getId() : null;
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        if (leave.getOrganization() == null || !leave.getOrganization().getId().equals(ctx.getOrganizationId())) {
+          return null;
+        }
+      } else {
+        if (leave.getOrganization() != null) {
+          return null;
+        }
+        boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+            auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+        if (isPlatformAdmin) {
+          return null;
+        }
+        boolean isLegacyAdmin = (auth != null && auth.getAuthorities() != null &&
+            auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
+        if (!isLegacyAdmin) {
+          return null;
+        }
+      }
       String prevStatus = leave.getStatus();
       leave.setStatus(status);
       Leave updatedLeave = leaveRepository.save(leave);
-      notificationService.createNotification("Leave request #" + id + " has been " + status.toLowerCase() + ".");
+      notificationService.createNotification(orgId, "Leave request #" + id + " has been " + status.toLowerCase() + ".");
 
       String actor = resolveActor(leave.getEmployeeName());
       String role = resolveActorRole(actor);
-      recordAuditEvent(id, "UPDATED", actor, role, prevStatus, status, null, null,
+      recordAuditEvent(orgId, id, "UPDATED", actor, role, prevStatus, status, null, null,
           "Leave status changed to " + status);
 
       return updatedLeave;
@@ -186,38 +339,57 @@ public class LeaveServiceImpl implements LeaveService {
 
   @Override
   public Leave approveLeave(Long id, String approver) {
-    // 1. Confirm the request exists
     Leave leave = leaveRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found"));
 
-    // 2. Confirm current status permits approval (prevent duplicate processing and invalid status transition)
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    Long orgId = leave.getOrganization() != null ? leave.getOrganization().getId() : null;
+    if (contextOpt.isPresent()) {
+      TenantContext ctx = contextOpt.get();
+      if (leave.getOrganization() == null || !leave.getOrganization().getId().equals(ctx.getOrganizationId())) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found");
+      }
+      if (!ctx.hasApprovalPrivileges()) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+            "Unauthorized: Only administrators or managers can approve leave requests.");
+      }
+    } else {
+      if (leave.getOrganization() != null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found");
+      }
+      boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+          auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+      if (isPlatformAdmin) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform administrators cannot perform tenant HR operations");
+      }
+    }
+
     if (!"Pending".equalsIgnoreCase(leave.getStatus())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "Invalid status transition: Leave request #" + id + " is already " + leave.getStatus());
     }
 
-    // 3. Resolve approver from parameter or SecurityContext
     if (approver == null || approver.isBlank()) {
-      Authentication auth = SecurityContextHolder.getContext().getAuthentication();
       if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
         approver = auth.getName();
       }
     }
 
-    // Approver authorization & Self-approval check
     if (approver != null) {
       if (approver.equalsIgnoreCase(leave.getEmployeeName())) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
             "Self-approval is strictly prohibited. Applicant cannot approve their own leave request.");
       }
-      User approverUser = userRepository.findByUsername(approver);
-      if (approverUser != null && !"admin".equalsIgnoreCase(approverUser.getRole())) {
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-            "Unauthorized: Only administrators/managers can approve leave requests.");
+      if (contextOpt.isEmpty()) {
+        User approverUser = userRepository.findByUsername(approver);
+        if (approverUser != null && !"admin".equalsIgnoreCase(approverUser.getRole())) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+              "Unauthorized: Only administrators/managers can approve leave requests.");
+        }
       }
     }
 
-    // 4. Calculate requested leave duration using SOP rules
     int requestedDays = calculateDays(leave.getStartDate(), leave.getEndDate(), leave.getDaysCount());
     if (requestedDays <= 0) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -225,7 +397,6 @@ public class LeaveServiceImpl implements LeaveService {
     }
     leave.setDaysCount(requestedDays);
 
-    // 5. Verify employee balance & deduct
     Integer previousBalance = null;
     Integer newBalance = null;
     if (leave.getEmployeeName() != null) {
@@ -237,14 +408,12 @@ public class LeaveServiceImpl implements LeaveService {
           throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
               "Insufficient leave balance. Required: " + requestedDays + ", Available: " + currentBalance);
         }
-        // Deduct correct number of days
         newBalance = currentBalance - requestedDays;
         employee.setLeaveBalance(newBalance);
         userRepository.save(employee);
       }
     }
 
-    // 6. Update leave status & record current-state metadata
     leave.setStatus("Approved");
     String actor = (approver != null && !approver.isBlank()) ? approver : "Admin";
     leave.setApprovedBy(actor);
@@ -252,13 +421,11 @@ public class LeaveServiceImpl implements LeaveService {
     leave.setActionAt(java.time.LocalDateTime.now().toString());
     Leave savedLeave = leaveRepository.save(leave);
 
-    // 7. Persist append-only audit event in the same transaction
-    recordAuditEvent(savedLeave.getId(), "APPROVED", actor, "ADMIN", "Pending", "Approved",
+    recordAuditEvent(orgId, savedLeave.getId(), "APPROVED", actor, "ADMIN", "Pending", "Approved",
         previousBalance, newBalance,
         "Leave request approved. " + requestedDays + " day(s) deducted from leave balance.");
 
-    // 8. Record notification
-    notificationService.createNotification(
+    notificationService.createNotification(orgId, leave.getEmployeeName(),
         "Leave request #" + id + " for " + leave.getEmployeeName() + " (" + requestedDays + " days) has been approved by " + actor + ".");
 
     return savedLeave;
@@ -266,38 +433,57 @@ public class LeaveServiceImpl implements LeaveService {
 
   @Override
   public Leave rejectLeave(Long id, String rejectionReason, String approver) {
-    // 1. Confirm the request exists
     Leave leave = leaveRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found"));
 
-    // 2. Confirm current status permits rejection
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    Long orgId = leave.getOrganization() != null ? leave.getOrganization().getId() : null;
+    if (contextOpt.isPresent()) {
+      TenantContext ctx = contextOpt.get();
+      if (leave.getOrganization() == null || !leave.getOrganization().getId().equals(ctx.getOrganizationId())) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found");
+      }
+      if (!ctx.hasApprovalPrivileges()) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+            "Unauthorized: Only administrators or managers can reject leave requests.");
+      }
+    } else {
+      if (leave.getOrganization() != null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found");
+      }
+      boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+          auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+      if (isPlatformAdmin) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform administrators cannot perform tenant HR operations");
+      }
+    }
+
     if (!"Pending".equalsIgnoreCase(leave.getStatus())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "Invalid status transition: Leave request #" + id + " is already " + leave.getStatus());
     }
 
-    // 3. Resolve approver from parameter or SecurityContext
     if (approver == null || approver.isBlank()) {
-      Authentication auth = SecurityContextHolder.getContext().getAuthentication();
       if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
         approver = auth.getName();
       }
     }
 
-    // Self-action check & approver role check
     if (approver != null) {
       if (approver.equalsIgnoreCase(leave.getEmployeeName())) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
             "Self-action is strictly prohibited. Applicant cannot reject their own leave request.");
       }
-      User approverUser = userRepository.findByUsername(approver);
-      if (approverUser != null && !"admin".equalsIgnoreCase(approverUser.getRole())) {
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-            "Unauthorized: Only administrators/managers can reject leave requests.");
+      if (contextOpt.isEmpty()) {
+        User approverUser = userRepository.findByUsername(approver);
+        if (approverUser != null && !"admin".equalsIgnoreCase(approverUser.getRole())) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+              "Unauthorized: Only administrators/managers can reject leave requests.");
+        }
       }
     }
 
-    // 4. Update status & persist rejection reason (NO balance deduction)
     leave.setStatus("Rejected");
     if (rejectionReason != null && !rejectionReason.isBlank()) {
       leave.setRejectionReason(rejectionReason);
@@ -311,7 +497,6 @@ public class LeaveServiceImpl implements LeaveService {
 
     Leave savedLeave = leaveRepository.save(leave);
 
-    // 5. Persist append-only audit event in the same transaction
     Integer empBal = null;
     if (leave.getEmployeeName() != null) {
       User emp = userRepository.findByUsername(leave.getEmployeeName());
@@ -319,11 +504,10 @@ public class LeaveServiceImpl implements LeaveService {
         empBal = emp.getLeaveBalance();
       }
     }
-    recordAuditEvent(savedLeave.getId(), "REJECTED", actor, "ADMIN", "Pending", "Rejected",
+    recordAuditEvent(orgId, savedLeave.getId(), "REJECTED", actor, "ADMIN", "Pending", "Rejected",
         empBal, empBal, "Leave request rejected. Reason: " + leave.getRejectionReason());
 
-    // 6. Record notification
-    notificationService.createNotification(
+    notificationService.createNotification(orgId, leave.getEmployeeName(),
         "Leave request #" + id + " for " + leave.getEmployeeName() + " was rejected. Reason: " + leave.getRejectionReason());
 
     return savedLeave;
@@ -331,18 +515,15 @@ public class LeaveServiceImpl implements LeaveService {
 
   @Override
   public Leave cancelLeave(Long id, String currentUser) {
-    // 1. Confirm the request exists
     Leave leave = leaveRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found"));
 
-    // 2. Prevent repeated cancellation and reject invalid status transitions
     String currentStatus = leave.getStatus();
     if ("Cancelled".equalsIgnoreCase(currentStatus)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "Invalid status transition: Leave request #" + id + " is already Cancelled");
     }
 
-    // Only Pending, Approved, or Rejected leaves can be transitioned to Cancelled
     if (!"Pending".equalsIgnoreCase(currentStatus) &&
         !"Approved".equalsIgnoreCase(currentStatus) &&
         !"Rejected".equalsIgnoreCase(currentStatus)) {
@@ -350,7 +531,6 @@ public class LeaveServiceImpl implements LeaveService {
           "Invalid status transition: Cannot cancel leave request with status " + currentStatus);
     }
 
-    // 3. Resolve caller identity from parameter or SecurityContext
     if (currentUser == null || currentUser.isBlank()) {
       Authentication auth = SecurityContextHolder.getContext().getAuthentication();
       if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
@@ -362,24 +542,42 @@ public class LeaveServiceImpl implements LeaveService {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required to cancel leave request");
     }
 
-    // 4. Authorization check: Employees can only cancel their own request; Admins/HR can cancel any request
-    User callerUser = userRepository.findByUsername(currentUser);
-    boolean isAdmin = (callerUser != null && "admin".equalsIgnoreCase(callerUser.getRole()));
-    if (!isAdmin) {
-      Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-      if (auth != null && auth.getAuthorities() != null) {
-        isAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    Long orgId = leave.getOrganization() != null ? leave.getOrganization().getId() : null;
+    boolean isApplicant = leave.getEmployeeName() != null && leave.getEmployeeName().equalsIgnoreCase(currentUser);
+
+    if (contextOpt.isPresent()) {
+      TenantContext ctx = contextOpt.get();
+      if (leave.getOrganization() == null || !leave.getOrganization().getId().equals(ctx.getOrganizationId())) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found");
+      }
+      if (!ctx.hasAdminOrHrPrivileges() && !isApplicant) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+            "Unauthorized: You cannot cancel another employee's leave request.");
+      }
+    } else {
+      if (leave.getOrganization() != null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + id + " not found");
+      }
+      boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+          auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+      if (isPlatformAdmin) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform administrators cannot perform tenant HR operations");
+      }
+      User callerUser = userRepository.findByUsername(currentUser);
+      boolean isAdmin = (callerUser != null && "admin".equalsIgnoreCase(callerUser.getRole()));
+      if (!isAdmin) {
+        if (auth != null && auth.getAuthorities() != null) {
+          isAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+        }
+      }
+      if (!isAdmin && !isApplicant) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+            "Unauthorized: You cannot cancel another employee's leave request.");
       }
     }
 
-    boolean isApplicant = leave.getEmployeeName() != null && leave.getEmployeeName().equalsIgnoreCase(currentUser);
-
-    if (!isAdmin && !isApplicant) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-          "Unauthorized: You cannot cancel another employee's leave request.");
-    }
-
-    // 5. Balance restoration: If previously Approved, restore deducted days; if Pending or Rejected, do not refund
     Integer prevBalance = null;
     Integer newBalance = null;
     int refundedDays = 0;
@@ -407,29 +605,30 @@ public class LeaveServiceImpl implements LeaveService {
       }
     }
 
-    // 6. Update status to Cancelled & record current-state metadata
     leave.setStatus("Cancelled");
     leave.setCancelledBy(currentUser);
     leave.setActionBy(currentUser);
     leave.setActionAt(java.time.LocalDateTime.now().toString());
     Leave savedLeave = leaveRepository.save(leave);
 
-    // 7. Persist append-only audit event in the same transaction
-    String callerRole = isAdmin ? "ADMIN" : "EMPLOYEE";
-    recordAuditEvent(savedLeave.getId(), "CANCELLED", currentUser, callerRole, currentStatus, "Cancelled",
+    boolean isAdminCaller = contextOpt.map(TenantContext::hasAdminOrHrPrivileges).orElse(false);
+    if (contextOpt.isEmpty() && auth != null && auth.getAuthorities() != null) {
+      isAdminCaller = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+    }
+    String callerRole = isAdminCaller ? "ADMIN" : "EMPLOYEE";
+    recordAuditEvent(orgId, savedLeave.getId(), "CANCELLED", currentUser, callerRole, currentStatus, "Cancelled",
         prevBalance, newBalance,
         "Leave request cancelled by " + currentUser +
         ("Approved".equalsIgnoreCase(currentStatus) ? ". " + refundedDays + " day(s) refunded to leave balance." : "."));
 
-    // 8. Notification
-    notificationService.createNotification(
+    notificationService.createNotification(orgId, leave.getEmployeeName(),
         "Leave request #" + id + " for " + leave.getEmployeeName() + " has been cancelled" +
         ("Approved".equalsIgnoreCase(currentStatus) ? " and leave balance has been refunded." : "."));
 
     return savedLeave;
   }
 
-  private void recordAuditEvent(Long leaveId, String eventType, String actor, String role,
+  private void recordAuditEvent(Long organizationId, Long leaveId, String eventType, String actor, String role,
                                  String fromStatus, String toStatus,
                                  Integer prevBalance, Integer newBalance, String details) {
     LeaveAuditEvent event = new LeaveAuditEvent(
@@ -444,6 +643,7 @@ public class LeaveServiceImpl implements LeaveService {
         newBalance,
         details
     );
+    event.setOrganizationId(organizationId);
     leaveAuditEventRepository.save(event);
   }
 
@@ -475,12 +675,43 @@ public class LeaveServiceImpl implements LeaveService {
   @Override
   @Transactional(readOnly = true)
   public Page<LeaveAuditEventDTO> getAuditTrailForLeave(Long leaveId, String eventType, int page, int size) {
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    
+    Leave leave = leaveRepository.findById(leaveId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + leaveId + " not found"));
+    
+    if (contextOpt.isPresent()) {
+      TenantContext ctx = contextOpt.get();
+      if (leave.getOrganization() == null || !leave.getOrganization().getId().equals(ctx.getOrganizationId())) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + leaveId + " not found");
+      }
+    } else {
+      if (leave.getOrganization() != null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Leave request #" + leaveId + " not found");
+      }
+      boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+          auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+      if (isPlatformAdmin) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform administrators cannot access tenant audit data");
+      }
+    }
+
     PageRequest pageRequest = PageRequest.of(page, size);
     Page<LeaveAuditEvent> events;
-    if (eventType != null && !eventType.isBlank()) {
-      events = leaveAuditEventRepository.findByLeaveIdAndEventTypeOrderByEventTimestampDesc(leaveId, eventType.toUpperCase(), pageRequest);
+    if (contextOpt.isPresent()) {
+      Long orgId = contextOpt.get().getOrganizationId();
+      if (eventType != null && !eventType.isBlank()) {
+        events = leaveAuditEventRepository.findByOrganizationIdAndLeaveIdAndEventTypeOrderByEventTimestampDesc(orgId, leaveId, eventType.toUpperCase(), pageRequest);
+      } else {
+        events = leaveAuditEventRepository.findByOrganizationIdAndLeaveIdOrderByEventTimestampDesc(orgId, leaveId, pageRequest);
+      }
     } else {
-      events = leaveAuditEventRepository.findByLeaveIdOrderByEventTimestampDesc(leaveId, pageRequest);
+      if (eventType != null && !eventType.isBlank()) {
+        events = leaveAuditEventRepository.findByLeaveIdAndEventTypeOrderByEventTimestampDesc(leaveId, eventType.toUpperCase(), pageRequest);
+      } else {
+        events = leaveAuditEventRepository.findByLeaveIdOrderByEventTimestampDesc(leaveId, pageRequest);
+      }
     }
     return events.map(LeaveAuditEventDTO::new);
   }
@@ -537,7 +768,12 @@ public class LeaveServiceImpl implements LeaveService {
     if (username == null || username.isBlank()) {
       return List.of();
     }
-    return leaveRepository.findByEmployeeNameIgnoreCase(username);
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    if (contextOpt.isPresent()) {
+      return leaveRepository.findByOrganizationIdAndEmployeeNameIgnoreCase(contextOpt.get().getOrganizationId(), username);
+    }
+    return leaveRepository.findByOrganizationIsNullAndEmployeeNameIgnoreCase(username);
   }
 
   @Override
@@ -546,6 +782,102 @@ public class LeaveServiceImpl implements LeaveService {
     if (username == null || username.isBlank()) {
       return Page.empty();
     }
-    return leaveRepository.findByEmployeeNameIgnoreCase(username, PageRequest.of(page, size));
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    if (contextOpt.isPresent()) {
+      return leaveRepository.findByOrganizationIdAndEmployeeNameIgnoreCase(contextOpt.get().getOrganizationId(), username, PageRequest.of(page, size));
+    }
+    return leaveRepository.findByOrganizationIsNullAndEmployeeNameIgnoreCase(username, PageRequest.of(page, size));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<TeamCalendarLeaveDTO> getTeamCalendar(String start, String end, String statusFilter, String currentUser, boolean isAdmin) {
+    if (start == null || start.isBlank() || end == null || end.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date and end date parameters are required in YYYY-MM-DD format.");
+    }
+
+    LocalDate startDate;
+    LocalDate endDate;
+    try {
+      startDate = LocalDate.parse(start.trim());
+      endDate = LocalDate.parse(end.trim());
+    } catch (DateTimeParseException dtpe) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date format. Expected YYYY-MM-DD: " + dtpe.getMessage());
+    }
+
+    if (endDate.isBefore(startDate)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Invalid date range: End date (" + endDate + ") cannot be before start date (" + startDate + ").");
+    }
+
+    long calendarDays = ChronoUnit.DAYS.between(startDate, endDate) + 1;
+    if (calendarDays > 93) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Requested calendar range cannot exceed 93 calendar days (requested: " + calendarDays + " days).");
+    }
+
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+    List<Leave> leaves;
+    if (contextOpt.isPresent()) {
+      Long orgId = contextOpt.get().getOrganizationId();
+      leaves = leaveRepository.findOverlappingActiveLeavesByOrg(orgId, start.trim(), end.trim());
+      isAdmin = contextOpt.get().hasAdminOrHrPrivileges();
+    } else {
+      boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
+          auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
+      if (isPlatformAdmin) {
+        leaves = Collections.emptyList();
+      } else {
+        boolean isLegacyAdmin = (auth != null && auth.getAuthorities() != null &&
+            auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
+        if (isLegacyAdmin) {
+          leaves = leaveRepository.findOverlappingActiveLeavesUnassigned(start.trim(), end.trim());
+        } else {
+          leaves = Collections.emptyList();
+        }
+      }
+    }
+
+    List<TeamCalendarLeaveDTO> result = new ArrayList<>();
+    for (Leave leave : leaves) {
+      String status = leave.getStatus();
+      if (status == null || "Rejected".equalsIgnoreCase(status) || "Cancelled".equalsIgnoreCase(status)) {
+        continue;
+      }
+
+      boolean isPending = "Pending".equalsIgnoreCase(status);
+
+      // Pending visibility rules:
+      // Administrators can see all team pending and approved requests.
+      // Regular employees can see all approved team requests, plus their own pending requests.
+      if (isPending) {
+        if (!isAdmin) {
+          if (currentUser == null || leave.getEmployeeName() == null || !currentUser.equalsIgnoreCase(leave.getEmployeeName())) {
+            continue; // Exclude colleague's pending leaves from non-admin employee view
+          }
+        }
+      }
+
+      // Optional status filter
+      if (statusFilter != null && !statusFilter.isBlank()) {
+        if (!statusFilter.equalsIgnoreCase(status)) {
+          continue;
+        }
+      }
+
+      result.add(new TeamCalendarLeaveDTO(
+          leave.getId(),
+          leave.getEmployeeName(),
+          leave.getStartDate(),
+          leave.getEndDate(),
+          leave.getDaysCount(),
+          leave.getStatus(),
+          "Out of Office"
+      ));
+    }
+
+    return result;
   }
 }

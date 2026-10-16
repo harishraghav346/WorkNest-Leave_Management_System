@@ -29,6 +29,11 @@ public class Leave {
   private String rejectedBy;
   private String cancelledBy;
 
+  @jakarta.persistence.ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+  @jakarta.persistence.JoinColumn(name = "organization_id")
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+  private Organization organization;
+
   public Leave() {
   }
 
@@ -142,5 +147,15 @@ public class Leave {
   }
   public void setCancelledBy(String cancelledBy) {
     this.cancelledBy = cancelledBy;
+  }
+
+  public Organization getOrganization() {
+    return organization;
+  }
+  public void setOrganization(Organization organization) {
+    this.organization = organization;
+  }
+  public Long getOrganizationId() {
+    return organization != null ? organization.getId() : null;
   }
 }

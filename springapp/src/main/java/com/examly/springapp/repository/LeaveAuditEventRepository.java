@@ -18,4 +18,14 @@ public interface LeaveAuditEventRepository extends JpaRepository<LeaveAuditEvent
     Page<LeaveAuditEvent> findAllByOrderByEventTimestampDesc(Pageable pageable);
 
     Page<LeaveAuditEvent> findByLeaveIdAndEventTypeOrderByEventTimestampDesc(Long leaveId, String eventType, Pageable pageable);
+
+    // Multi-tenant scoped audit queries
+    Page<LeaveAuditEvent> findByOrganizationIdAndLeaveIdOrderByEventTimestampDesc(Long organizationId, Long leaveId, Pageable pageable);
+
+    Page<LeaveAuditEvent> findByOrganizationIdAndLeaveIdAndEventTypeOrderByEventTimestampDesc(Long organizationId, Long leaveId, String eventType, Pageable pageable);
+
+    Page<LeaveAuditEvent> findByOrganizationIdOrderByEventTimestampDesc(Long organizationId, Pageable pageable);
+
+    java.util.Optional<LeaveAuditEvent> findByIdAndOrganizationId(Long id, Long organizationId);
+    List<LeaveAuditEvent> findByOrganizationIdIsNull();
 }

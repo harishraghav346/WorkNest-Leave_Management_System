@@ -2,6 +2,7 @@ package com.examly.springapp.controller;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -21,7 +22,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.examly.springapp.model.Leave;
 import com.examly.springapp.model.LeaveAuditEventDTO;
+import com.examly.springapp.model.TeamCalendarLeaveDTO;
+import com.examly.springapp.model.TenantContext;
+import com.examly.springapp.repository.LeaveRepository;
 import com.examly.springapp.service.LeaveService;
+import com.examly.springapp.service.TenantContextService;
 
 @RestController
 @RequestMapping("/leaves")
@@ -30,16 +35,55 @@ public class LeaveController {
   @Autowired
   private LeaveService leaveService;
 
+  @Autowired
+  private LeaveRepository leaveRepository;
+
+  @Autowired
+  private TenantContextService tenantContextService;
+
   @GetMapping
   public List<Leave> getAllLeave(Authentication authentication) {
     if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
-      boolean isAdmin = authentication.getAuthorities().stream()
-          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
-      if (!isAdmin) {
-        return leaveService.getLeavesForUser(authentication.getName());
+      Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        if (!ctx.hasAdminOrHrPrivileges()) {
+          return leaveService.getLeavesForUser(authentication.getName());
+        }
+        return leaveService.getAllLeave();
+      } else {
+        boolean isAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+        if (!isAdmin) {
+          return leaveService.getLeavesForUser(authentication.getName());
+        }
       }
     }
     return leaveService.getAllLeave();
+  }
+
+  @GetMapping("/calendar")
+  public ResponseEntity<List<TeamCalendarLeaveDTO>> getTeamCalendar(
+      @RequestParam String start,
+      @RequestParam String end,
+      @RequestParam(required = false) String status,
+      Authentication authentication) {
+    if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required to view calendar.");
+    }
+
+    boolean isAdmin = false;
+    Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
+    if (contextOpt.isPresent()) {
+      isAdmin = contextOpt.get().hasAdminOrHrPrivileges();
+    } else {
+      isAdmin = authentication.getAuthorities().stream()
+          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+    }
+
+    String currentUser = authentication.getName();
+    List<TeamCalendarLeaveDTO> calendarLeaves = leaveService.getTeamCalendar(start, end, status, currentUser, isAdmin);
+    return ResponseEntity.ok(calendarLeaves);
   }
 
   @GetMapping("/{id}")
@@ -49,8 +93,10 @@ public class LeaveController {
       return ResponseEntity.notFound().build();
     }
     if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
-      boolean isAdmin = authentication.getAuthorities().stream()
-          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+      Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
+      boolean isAdmin = contextOpt.map(TenantContext::hasAdminOrHrPrivileges)
+          .orElseGet(() -> authentication.getAuthorities().stream()
+              .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
       if (!isAdmin && leave.getEmployeeName() != null && !leave.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You can only view your own leave records.");
       }
@@ -64,12 +110,22 @@ public class LeaveController {
       leave.setStatus("Pending");
     }
     if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
-      boolean isAdmin = authentication.getAuthorities().stream()
-          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
-      if (!isAdmin) {
-        leave.setEmployeeName(authentication.getName());
-      } else if (leave.getEmployeeName() == null || leave.getEmployeeName().isBlank()) {
-        leave.setEmployeeName(authentication.getName());
+      Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        if (!ctx.hasAdminOrHrPrivileges()) {
+          leave.setEmployeeName(authentication.getName());
+        } else if (leave.getEmployeeName() == null || leave.getEmployeeName().isBlank()) {
+          leave.setEmployeeName(authentication.getName());
+        }
+      } else {
+        boolean isAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+        if (!isAdmin) {
+          leave.setEmployeeName(authentication.getName());
+        } else if (leave.getEmployeeName() == null || leave.getEmployeeName().isBlank()) {
+          leave.setEmployeeName(authentication.getName());
+        }
       }
     }
     return leaveService.createLeave(leave);
@@ -78,17 +134,37 @@ public class LeaveController {
   @PutMapping("/{id}")
   public ResponseEntity<Leave> updateLeave(@PathVariable Long id, @RequestBody Leave leave, Authentication authentication) {
     if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
-      boolean isAdmin = authentication.getAuthorities().stream()
-          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
-      if (!isAdmin) {
-        Leave existing = leaveService.getLeaveById(id);
-        if (existing == null) {
+      Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        Leave existing = leaveRepository.findById(id).orElse(null);
+        if (existing == null || existing.getOrganization() == null || !existing.getOrganization().getId().equals(ctx.getOrganizationId())) {
           return ResponseEntity.notFound().build();
         }
-        if (existing.getEmployeeName() != null && !existing.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
-          throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot edit another employee's leave request.");
+        if (!ctx.hasAdminOrHrPrivileges()) {
+          if (existing.getEmployeeName() != null && !existing.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot edit another employee's leave request.");
+          }
+          leave.setEmployeeName(authentication.getName());
         }
-        leave.setEmployeeName(authentication.getName());
+      } else {
+        boolean isPlatformAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN"));
+        if (isPlatformAdmin) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform administrators cannot perform tenant HR operations");
+        }
+        boolean isAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+        Leave existing = leaveRepository.findById(id).orElse(null);
+        if (existing == null || existing.getOrganization() != null) {
+          return ResponseEntity.notFound().build();
+        }
+        if (!isAdmin) {
+          if (existing.getEmployeeName() != null && !existing.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot edit another employee's leave request.");
+          }
+          leave.setEmployeeName(authentication.getName());
+        }
       }
     }
     Leave updatedLeave = leaveService.updateLeave(id, leave);
@@ -101,15 +177,34 @@ public class LeaveController {
   @DeleteMapping("/{id}")
   public ResponseEntity<Void> deleteLeave(@PathVariable Long id, Authentication authentication) {
     if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
-      boolean isAdmin = authentication.getAuthorities().stream()
-          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
-      if (!isAdmin) {
-        Leave existing = leaveService.getLeaveById(id);
-        if (existing == null) {
+      Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        Leave existing = leaveRepository.findById(id).orElse(null);
+        if (existing == null || existing.getOrganization() == null || !existing.getOrganization().getId().equals(ctx.getOrganizationId())) {
           return ResponseEntity.notFound().build();
         }
-        if (existing.getEmployeeName() != null && !existing.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
-          throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot delete another employee's leave request.");
+        if (!ctx.hasAdminOrHrPrivileges()) {
+          if (existing.getEmployeeName() != null && !existing.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot delete another employee's leave request.");
+          }
+        }
+      } else {
+        boolean isPlatformAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN"));
+        if (isPlatformAdmin) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform administrators cannot perform tenant HR operations");
+        }
+        boolean isAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+        Leave existing = leaveRepository.findById(id).orElse(null);
+        if (existing == null || existing.getOrganization() != null) {
+          return ResponseEntity.notFound().build();
+        }
+        if (!isAdmin) {
+          if (existing.getEmployeeName() != null && !existing.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You cannot delete another employee's leave request.");
+          }
         }
       }
     }
@@ -127,14 +222,28 @@ public class LeaveController {
       @RequestParam(defaultValue = "5") int size,
       Authentication authentication) {
     if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
-      boolean isAdmin = authentication.getAuthorities().stream()
-          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
-      if (!isAdmin) {
-        return leaveService.getLeavesForUserPaginated(authentication.getName(), page, size);
+      Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        if (!ctx.hasAdminOrHrPrivileges()) {
+          return leaveService.getLeavesForUserPaginated(authentication.getName(), page, size);
+        }
+        return leaveService.getLeavesPaginated(page, size);
+      } else {
+        boolean isPlatformAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN"));
+        if (isPlatformAdmin) {
+          return Page.empty(org.springframework.data.domain.PageRequest.of(page, size));
+        }
+        boolean isAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+        if (!isAdmin) {
+          return leaveService.getLeavesForUserPaginated(authentication.getName(), page, size);
+        }
       }
     }
     return leaveService.getLeavesPaginated(page, size);
-  } 
+  }
 
   @PutMapping("/{id}/approve")
   public ResponseEntity<Leave> approveLeave(@PathVariable Long id, Authentication authentication) {
@@ -171,11 +280,34 @@ public class LeaveController {
     if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required to view audit logs.");
     }
-    boolean isAdmin = authentication.getAuthorities().stream()
-        .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
-    if (!isAdmin) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Administrator privileges required to view audit logs.");
+
+    Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
+    if (contextOpt.isPresent()) {
+      TenantContext ctx = contextOpt.get();
+      if (!ctx.hasAdminOrHrPrivileges()) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Administrator privileges required to view audit logs.");
+      }
+      Leave leave = leaveRepository.findById(id).orElse(null);
+      if (leave == null || leave.getOrganization() == null || !leave.getOrganization().getId().equals(ctx.getOrganizationId())) {
+        return ResponseEntity.notFound().build();
+      }
+    } else {
+      Leave leave = leaveRepository.findById(id).orElse(null);
+      if (leave == null || leave.getOrganization() != null) {
+        return ResponseEntity.notFound().build();
+      }
+      boolean isPlatformAdmin = authentication.getAuthorities().stream()
+          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN"));
+      if (isPlatformAdmin) {
+        return ResponseEntity.notFound().build();
+      }
+      boolean isAdmin = authentication.getAuthorities().stream()
+          .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+      if (!isAdmin) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Administrator privileges required to view audit logs.");
+      }
     }
+
     int constrainedSize = Math.max(1, Math.min(size, 100));
     int constrainedPage = Math.max(0, page);
     Page<LeaveAuditEventDTO> auditTrail = leaveService.getAuditTrailForLeave(id, eventType, constrainedPage, constrainedSize);

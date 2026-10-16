@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import com.examly.springapp.model.Leave;
 
 import com.examly.springapp.model.LeaveAuditEventDTO;
+import com.examly.springapp.model.TeamCalendarLeaveDTO;
 
 public interface LeaveService {
   Leave createLeave(Leave leave);
@@ -22,4 +23,5 @@ public interface LeaveService {
   Page<LeaveAuditEventDTO> getAuditTrailForLeave(Long leaveId, String eventType, int page, int size);
   int calculateWorkingDays(java.time.LocalDate start, java.time.LocalDate end);
   int calculateDays(String startDate, String endDate, Integer fallbackDays);
+  List<TeamCalendarLeaveDTO> getTeamCalendar(String start, String end, String status, String currentUser, boolean isAdmin);
 }

@@ -4,13 +4,15 @@ import com.examly.springapp.model.AiChatRequest;
 import com.examly.springapp.model.AiChatResponse;
 import com.examly.springapp.model.AiImpactResponse;
 import com.examly.springapp.model.Leave;
+import com.examly.springapp.model.TenantContext;
 import com.examly.springapp.repository.LeaveRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +22,9 @@ public class AiServiceImpl implements AiService {
 
     @Autowired
     private LeaveRepository leaveRepository;
+
+    @Autowired
+    private TenantContextService tenantContextService;
 
     @Override
     public AiChatResponse processChat(AiChatRequest request) {
@@ -71,13 +76,33 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public AiImpactResponse analyzeImpact(Long leaveId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+
         Optional<Leave> opt = leaveRepository.findById(leaveId);
         if (opt.isEmpty()) {
             return new AiImpactResponse("UNKNOWN", 100, 0, new ArrayList<>(), "Leave record not found.", "N/A");
         }
 
         Leave target = opt.get();
-        List<Leave> all = leaveRepository.findAll();
+        if (contextOpt.isPresent()) {
+            TenantContext ctx = contextOpt.get();
+            if (target.getOrganization() == null || !target.getOrganization().getId().equals(ctx.getOrganizationId())) {
+                return new AiImpactResponse("UNKNOWN", 100, 0, new ArrayList<>(), "Leave record not found.", "N/A");
+            }
+        } else {
+            if (target.getOrganization() != null) {
+                return new AiImpactResponse("UNKNOWN", 100, 0, new ArrayList<>(), "Leave record not found.", "N/A");
+            }
+        }
+
+        List<Leave> all;
+        if (contextOpt.isPresent()) {
+            all = leaveRepository.findByOrganizationId(contextOpt.get().getOrganizationId());
+        } else {
+            all = leaveRepository.findByOrganizationIsNull();
+        }
+
         List<String> overlappingPeers = new ArrayList<>();
 
         LocalDate targetStart;
@@ -130,12 +155,14 @@ public class AiServiceImpl implements AiService {
 
         if (overlappingCount >= 2 || duration > 5) {
             riskLevel = "HIGH";
-            recommendation = "High team workload risk: Multiple colleagues are already scheduled away during this window (" + String.join(", ", overlappingPeers) + "). Recommend confirming team coverage before approving.";
+            String peersStr = overlappingPeers.isEmpty() ? "none" : String.join(", ", overlappingPeers);
+            recommendation = "High team workload risk: " + (overlappingCount >= 2 ? "Multiple colleagues are already scheduled away during this window (" + peersStr + ")." : "Extended leave duration (" + duration + " days).") + " Recommend confirming team coverage before approving.";
             summary = String.format("%d colleague(s) overlapping. Team capacity at ~%d%%.", overlappingCount, capacity);
         } else if (overlappingCount == 1 || duration > 3) {
             riskLevel = "MEDIUM";
-            recommendation = "Moderate workload impact: 1 colleague (" + overlappingPeers.get(0) + ") has overlapping leave. Team capacity at ~" + capacity + "%. Safe if critical deadlines are not set.";
-            summary = String.format("1 colleague overlapping. Team capacity at ~%d%%.", capacity);
+            String peerName = overlappingPeers.isEmpty() ? "none" : overlappingPeers.get(0);
+            recommendation = "Moderate workload impact: " + (overlappingCount == 1 ? "1 colleague (" + peerName + ") has overlapping leave." : "Leave duration is " + duration + " days.") + " Team capacity at ~" + capacity + "%. Safe if critical deadlines are not set.";
+            summary = String.format("%d colleague(s) overlapping. Team capacity at ~%d%%.", overlappingCount, capacity);
         } else {
             riskLevel = "LOW";
             recommendation = "Minimal operational impact: No schedule conflicts detected. Duration is " + duration + " day(s). Recommended for approval.";
@@ -147,11 +174,25 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public String generateOutOfOffice(Long leaveId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
+
         Optional<Leave> opt = leaveRepository.findById(leaveId);
         if (opt.isEmpty()) {
             return "Leave not found.";
         }
         Leave leave = opt.get();
+        if (contextOpt.isPresent()) {
+            TenantContext ctx = contextOpt.get();
+            if (leave.getOrganization() == null || !leave.getOrganization().getId().equals(ctx.getOrganizationId())) {
+                return "Leave not found.";
+            }
+        } else {
+            if (leave.getOrganization() != null) {
+                return "Leave not found.";
+            }
+        }
+
         return String.format(
                 "Subject: Out of Office: %s (%s to %s)\n\n" +
                 "Hello,\n\n" +
