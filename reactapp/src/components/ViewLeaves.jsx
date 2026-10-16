@@ -83,23 +83,40 @@ const ViewLeaves = () => {
     return matchesUser && matchesStatus;
   });
 
+  const calculateWorkingDays = (startDate, endDate) => {
+    if (!startDate || !endDate) return 1;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (end < start) return 0;
+    let count = 0;
+    let cur = new Date(start);
+    while (cur <= end) {
+      const day = cur.getDay();
+      if (day !== 0 && day !== 6) {
+        count++;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return Math.max(1, count);
+  };
+
   // Calculate quota numbers
   const approvedDays = displayedLeaves
     .filter(l => l.status === 'Approved')
     .reduce((sum, l) => {
-      const start = new Date(l.startDate);
-      const end = new Date(l.endDate);
-      const days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
-      return sum + (l.daysCount || days);
+      const days = (l.daysCount !== undefined && l.daysCount !== null)
+        ? l.daysCount
+        : calculateWorkingDays(l.startDate, l.endDate);
+      return sum + days;
     }, 0);
 
   const pendingDays = displayedLeaves
     .filter(l => l.status === 'Pending')
     .reduce((sum, l) => {
-      const start = new Date(l.startDate);
-      const end = new Date(l.endDate);
-      const days = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
-      return sum + (l.daysCount || days);
+      const days = (l.daysCount !== undefined && l.daysCount !== null)
+        ? l.daysCount
+        : calculateWorkingDays(l.startDate, l.endDate);
+      return sum + days;
     }, 0);
 
   const totalQuota = 20;

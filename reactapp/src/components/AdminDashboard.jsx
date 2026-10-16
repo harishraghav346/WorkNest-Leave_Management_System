@@ -70,13 +70,32 @@ const AdminDashboard = () => {
     setCurrentPage(page);
   };
 
+  const calculateWorkingDays = (startDate, endDate) => {
+    if (!startDate || !endDate) return 1;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (end < start) return 0;
+    let count = 0;
+    let cur = new Date(start);
+    while (cur <= end) {
+      const day = cur.getDay();
+      if (day !== 0 && day !== 6) {
+        count++;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return Math.max(1, count);
+  };
+
   // AI Impact Analyzer: Calculates overlaps, duration, and generates smart recommendations
   const runAiImpactAnalysis = (request) => {
     setAnalyzingId(request.id);
     setTimeout(() => {
       const reqStart = new Date(request.startDate);
       const reqEnd = new Date(request.endDate);
-      const diffDays = Math.max(1, Math.round((reqEnd - reqStart) / (1000 * 60 * 60 * 24)) + 1);
+      const diffDays = (request.daysCount && request.daysCount > 0)
+        ? request.daysCount
+        : calculateWorkingDays(request.startDate, request.endDate);
 
       // Check overlapping approved/pending leaves by OTHER employees
       const overlapping = allLeavesForAnalysis.filter((l) => {

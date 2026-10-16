@@ -51,8 +51,8 @@ const AddLeave = () => {
       await addLeave(newLeave);
       navigate("/view-leaves");
     } catch (err) {
-      console.error("Error adding leave:", err);
-      setError("Failed to submit leave request. Please verify details and try again.");
+      const serverMsg = err.response?.data?.message || err.response?.data?.reason || err.message;
+      setError(serverMsg || "Failed to submit leave request. Please verify details and try again.");
     } finally {
       setLoading(false);
     }

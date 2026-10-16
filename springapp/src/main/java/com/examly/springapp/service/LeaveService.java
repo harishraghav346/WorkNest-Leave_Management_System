@@ -20,4 +20,6 @@ public interface LeaveService {
   List<Leave> getLeavesForUser(String username);
   Page<Leave> getLeavesForUserPaginated(String username, int page, int size);
   Page<LeaveAuditEventDTO> getAuditTrailForLeave(Long leaveId, String eventType, int page, int size);
+  int calculateWorkingDays(java.time.LocalDate start, java.time.LocalDate end);
+  int calculateDays(String startDate, String endDate, Integer fallbackDays);
 }

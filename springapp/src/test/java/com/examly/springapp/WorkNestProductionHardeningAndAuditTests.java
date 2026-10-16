@@ -7,9 +7,13 @@ import com.examly.springapp.model.User;
 import com.examly.springapp.repository.LeaveAuditEventRepository;
 import com.examly.springapp.repository.UserRepository;
 import com.examly.springapp.service.LeaveService;
+import com.examly.springapp.config.DataInitializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +27,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -121,6 +126,263 @@ public class WorkNestProductionHardeningAndAuditTests {
 
         assertDoesNotThrow(testJwt::validateAndInitializeKey);
         assertNotNull(testJwt.getSigningKey());
+    }
+
+    @Test
+    @DisplayName("2A.4: Production alias 'production' missing JWT_SECRET must fail closed")
+    void testJwtSecretMissingInProductionAliasFailsStartup() {
+        JwtUtil testJwt = new JwtUtil();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("production");
+
+        ReflectionTestUtils.setField(testJwt, "environment", env);
+        ReflectionTestUtils.setField(testJwt, "secret", "");
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, testJwt::validateAndInitializeKey);
+        assertTrue(ex.getMessage().contains("JWT_SECRET"));
+        assertTrue(ex.getMessage().contains("Production profile 'production'"));
+    }
+
+    @Test
+    @DisplayName("2A.5: Default dev secret in production profile must fail closed")
+    void testDefaultDevSecretInProductionFailsStartup() {
+        JwtUtil testJwt = new JwtUtil();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+
+        ReflectionTestUtils.setField(testJwt, "environment", env);
+        ReflectionTestUtils.setField(testJwt, "secret", JwtUtil.DEFAULT_DEV_SECRET);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, testJwt::validateAndInitializeKey);
+        assertTrue(ex.getMessage().contains("default development JWT secret cannot be used in production"));
+    }
+
+    @Test
+    @DisplayName("2A.6: Base64-encoded 32+ byte secret initializes successfully and generates valid tokens")
+    void testBase64SecretInitializesAndValidatesTokens() {
+        JwtUtil testJwt = new JwtUtil();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+
+        // 32 bytes of binary material encoded in base64: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=" (32 bytes = "abcdefghijklmnopqrstuvwxyz123456")
+        String base64Secret = "base64:YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=";
+
+        ReflectionTestUtils.setField(testJwt, "environment", env);
+        ReflectionTestUtils.setField(testJwt, "secret", base64Secret);
+
+        assertDoesNotThrow(testJwt::validateAndInitializeKey);
+        assertNotNull(testJwt.getSigningKey());
+
+        String token = testJwt.generateToken("testuser", "admin");
+        assertTrue(testJwt.validateToken(token));
+        assertEquals("testuser", testJwt.extractUsername(token));
+        assertEquals("admin", testJwt.extractRole(token));
+    }
+
+    @Test
+    @DisplayName("2A.7: Malformed Base64 secret fails closed with descriptive IllegalStateException")
+    void testMalformedBase64SecretFailsStartup() {
+        JwtUtil testJwt = new JwtUtil();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+
+        ReflectionTestUtils.setField(testJwt, "environment", env);
+        ReflectionTestUtils.setField(testJwt, "secret", "base64:!!!not-valid-base64!!!");
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, testJwt::validateAndInitializeKey);
+        assertTrue(ex.getMessage().contains("Failed to decode Base64"));
+    }
+
+    @Test
+    @DisplayName("2A.8: Base64 secret with decoded length under 32 bytes fails closed")
+    void testBase64SecretTooShortFailsStartup() {
+        JwtUtil testJwt = new JwtUtil();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+
+        // Base64 for "short" (5 bytes)
+        ReflectionTestUtils.setField(testJwt, "environment", env);
+        ReflectionTestUtils.setField(testJwt, "secret", "base64:c2hvcnQ=");
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, testJwt::validateAndInitializeKey);
+        assertTrue(ex.getMessage().contains("at least 32 bytes"));
+    }
+
+    @Test
+    @DisplayName("2A.9: Expired JWT token is rejected by validateToken and protected endpoints (401 Unauthorized)")
+    void testExpiredTokenRejected() throws Exception {
+        JwtUtil testJwt = new JwtUtil();
+        MockEnvironment env = new MockEnvironment();
+        ReflectionTestUtils.setField(testJwt, "environment", env);
+        ReflectionTestUtils.setField(testJwt, "secret", "valid_secret_key_at_least_32_bytes_long_12345");
+        // Negative expiration yields expired token
+        ReflectionTestUtils.setField(testJwt, "expiration", -10000L);
+        testJwt.validateAndInitializeKey();
+
+        String expiredToken = testJwt.generateToken("testuser", "employee");
+        assertFalse(testJwt.validateToken(expiredToken), "Expired token must be rejected");
+
+        mockMvc.perform(get("/auth/me")
+                .header("Authorization", "Bearer " + expiredToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("2A.10: Token signed with a different key is rejected by validateToken and protected endpoints")
+    void testInvalidSignatureTokenRejected() throws Exception {
+        JwtUtil testJwtOther = new JwtUtil();
+        MockEnvironment env = new MockEnvironment();
+        ReflectionTestUtils.setField(testJwtOther, "environment", env);
+        ReflectionTestUtils.setField(testJwtOther, "secret", "completely_different_signing_key_at_least_32_bytes!");
+        testJwtOther.validateAndInitializeKey();
+
+        String tamperedToken = testJwtOther.generateToken("admin", "admin");
+
+        assertFalse(jwtUtil.validateToken(tamperedToken), "Token signed with different key must fail validation");
+
+        mockMvc.perform(get("/leaves/1/audit")
+                .header("Authorization", "Bearer " + tamperedToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // =========================================================================
+    // TASK 2B: ADMINISTRATOR PROVISIONING & SECURITY TESTS
+    // =========================================================================
+
+    @Test
+    @DisplayName("2B.1: Production DataInitializer preserves existing admin and does not overwrite password")
+    void testExistingAdminPreservedOnRestart() {
+        DataInitializer initializer = new DataInitializer();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+
+        User existingAdmin = userRepository.findByUsername("admin");
+        assertNotNull(existingAdmin);
+        String originalPasswordHash = existingAdmin.getPassword();
+
+        ReflectionTestUtils.setField(initializer, "userRepository", userRepository);
+        ReflectionTestUtils.setField(initializer, "passwordEncoder", passwordEncoder);
+        ReflectionTestUtils.setField(initializer, "environment", env);
+        ReflectionTestUtils.setField(initializer, "initialAdminUsername", "admin");
+        ReflectionTestUtils.setField(initializer, "initialAdminPassword", "NewPasswordThatShouldNotBeUsed123!");
+
+        // Run data initializer as if application is restarting
+        initializer.run();
+
+        User adminAfterRestart = userRepository.findByUsername("admin");
+        assertEquals(originalPasswordHash, adminAfterRestart.getPassword(), "Admin password hash must remain untouched on restart");
+    }
+
+    @Test
+    @DisplayName("2B.2: Production DataInitializer creates admin with BCrypt hash when 0 admins exist and password is provided")
+    void testAdminBootstrapWhenZeroAdminsExist() {
+        DataInitializer initializer = new DataInitializer();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("production");
+
+        UserRepository mockRepo = Mockito.mock(UserRepository.class);
+        Mockito.when(mockRepo.findAll()).thenReturn(List.of());
+
+        ReflectionTestUtils.setField(initializer, "userRepository", mockRepo);
+        ReflectionTestUtils.setField(initializer, "passwordEncoder", passwordEncoder);
+        ReflectionTestUtils.setField(initializer, "environment", env);
+        ReflectionTestUtils.setField(initializer, "initialAdminUsername", "bootstrapped_admin");
+        ReflectionTestUtils.setField(initializer, "initialAdminPassword", "SecureBootPass2026!");
+
+        initializer.run();
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        Mockito.verify(mockRepo).save(userCaptor.capture());
+
+        User savedAdmin = userCaptor.getValue();
+        assertEquals("bootstrapped_admin", savedAdmin.getUsername());
+        assertEquals("admin", savedAdmin.getRole());
+        assertTrue(passwordEncoder.matches("SecureBootPass2026!", savedAdmin.getPassword()), "Bootstrap password must be BCrypt hashed");
+        assertNotEquals("SecureBootPass2026!", savedAdmin.getPassword(), "Password must never be saved in plaintext");
+    }
+
+    @Test
+    @DisplayName("2B.3: Production DataInitializer does NOT create admin when 0 admins exist but no password is provided")
+    void testNoAdminCreatedWhenPasswordMissingInProduction() {
+        DataInitializer initializer = new DataInitializer();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+
+        UserRepository mockRepo = Mockito.mock(UserRepository.class);
+        Mockito.when(mockRepo.findAll()).thenReturn(List.of());
+
+        ReflectionTestUtils.setField(initializer, "userRepository", mockRepo);
+        ReflectionTestUtils.setField(initializer, "passwordEncoder", passwordEncoder);
+        ReflectionTestUtils.setField(initializer, "environment", env);
+        ReflectionTestUtils.setField(initializer, "initialAdminUsername", "admin");
+        ReflectionTestUtils.setField(initializer, "initialAdminPassword", "");
+
+        initializer.run();
+
+        Mockito.verify(mockRepo, Mockito.never()).save(Mockito.any(User.class));
+    }
+
+    @Test
+    @DisplayName("2B.4: User password is not exposed in JSON serialization")
+    void testUserPasswordNotExposedInJsonSerialization() throws Exception {
+        User user = new User("testuser", passwordEncoder.encode("secretpassword"), "employee");
+        ObjectMapper mapper = new ObjectMapper();
+        String json = mapper.writeValueAsString(user);
+
+        assertFalse(json.contains("secretpassword"), "Plaintext password must not appear in JSON");
+        assertFalse(json.contains("password"), "Password field should not be serialized due to WRITE_ONLY");
+    }
+
+    @Test
+    @DisplayName("2B.5: BCrypt password encoder validates correct password and rejects incorrect password")
+    void testBCryptPasswordVerification() {
+        String rawPass = "MySecureP@ssword2026";
+        String encoded = passwordEncoder.encode(rawPass);
+
+        assertTrue(passwordEncoder.matches(rawPass, encoded), "BCrypt must match correct raw password");
+        assertFalse(passwordEncoder.matches("WrongPassword", encoded), "BCrypt must reject incorrect password");
+    }
+
+    @Test
+    @DisplayName("2B.6: Removing ADMIN_INITIAL_PASSWORD after initial setup does not affect existing admin login")
+    void testRemovingAdminInitialPasswordDoesNotAffectExistingAdmin() {
+        DataInitializer initializer = new DataInitializer();
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+
+        User existingAdmin = userRepository.findByUsername("admin");
+        assertNotNull(existingAdmin);
+        String savedPasswordHash = existingAdmin.getPassword();
+
+        // Subsequent startup where ADMIN_INITIAL_PASSWORD is omitted
+        ReflectionTestUtils.setField(initializer, "userRepository", userRepository);
+        ReflectionTestUtils.setField(initializer, "passwordEncoder", passwordEncoder);
+        ReflectionTestUtils.setField(initializer, "environment", env);
+        ReflectionTestUtils.setField(initializer, "initialAdminUsername", "admin");
+        ReflectionTestUtils.setField(initializer, "initialAdminPassword", "");
+
+        initializer.run();
+
+        User adminAfterReboot = userRepository.findByUsername("admin");
+        assertEquals(savedPasswordHash, adminAfterReboot.getPassword(), "Admin password hash must remain untouched");
+        assertTrue(passwordEncoder.matches("password123", adminAfterReboot.getPassword()), "Existing admin remains able to log in");
+    }
+
+    @Test
+    @DisplayName("2B.7: Public registration cannot create an administrator even if role is requested as admin")
+    void testPublicRegistrationCannotCreateAdmin() throws Exception {
+        String testUsername = "reg_sec_user_" + System.currentTimeMillis();
+        String requestJson = String.format("{\"username\":\"%s\",\"password\":\"securePass123!\",\"role\":\"admin\"}", testUsername);
+
+        mockMvc.perform(post("/auth/register")
+                .contentType("application/json")
+                .content(requestJson))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role").value("employee"));
+
+        User created = userRepository.findByUsername(testUsername);
+        assertNotNull(created);
+        assertEquals("employee", created.getRole(), "Public registration must force employee role");
     }
 
     // =========================================================================

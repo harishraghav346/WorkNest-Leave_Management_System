@@ -69,7 +69,8 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         boolean isProd = false;
         if (environment != null && environment.getActiveProfiles() != null) {
-            isProd = Arrays.asList(environment.getActiveProfiles()).contains("prod");
+            isProd = Arrays.stream(environment.getActiveProfiles())
+                    .anyMatch(p -> p.equalsIgnoreCase("prod") || p.equalsIgnoreCase("production"));
         }
 
         final boolean finalIsProd = isProd;

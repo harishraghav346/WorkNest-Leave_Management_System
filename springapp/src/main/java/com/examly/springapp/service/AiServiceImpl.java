@@ -8,6 +8,7 @@ import com.examly.springapp.repository.LeaveRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -103,7 +104,21 @@ public class AiServiceImpl implements AiService {
             }
         }
 
-        long duration = Math.max(1, ChronoUnit.DAYS.between(targetStart, targetEnd) + 1);
+        long duration;
+        if (target.getDaysCount() != null && target.getDaysCount() > 0) {
+            duration = target.getDaysCount();
+        } else {
+            long workDays = 0;
+            LocalDate curr = targetStart;
+            while (!curr.isAfter(targetEnd)) {
+                DayOfWeek dow = curr.getDayOfWeek();
+                if (dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) {
+                    workDays++;
+                }
+                curr = curr.plusDays(1);
+            }
+            duration = Math.max(1, workDays);
+        }
         int overlappingCount = overlappingPeers.size();
 
         String riskLevel = "LOW";

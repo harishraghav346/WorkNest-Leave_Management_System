@@ -17,8 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +50,10 @@ public class LeaveServiceImpl implements LeaveService {
       leave.setCreatedAt(java.time.LocalDateTime.now().toString());
     }
     int calculatedDays = calculateDays(leave.getStartDate(), leave.getEndDate(), leave.getDaysCount());
+    if (calculatedDays <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Invalid leave request: Selected date range contains 0 working days (weekends are excluded).");
+    }
     leave.setDaysCount(calculatedDays);
 
     Leave newLeave = leaveRepository.save(leave);
@@ -114,7 +120,12 @@ public class LeaveServiceImpl implements LeaveService {
       if (leave.getRejectionReason() != null) {
         l.setRejectionReason(leave.getRejectionReason());
       }
-      l.setDaysCount(calculateDays(l.getStartDate(), l.getEndDate(), l.getDaysCount()));
+      int calculatedDays = calculateDays(l.getStartDate(), l.getEndDate(), l.getDaysCount());
+      if (calculatedDays <= 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Invalid leave request: Selected date range contains 0 working days (weekends are excluded).");
+      }
+      l.setDaysCount(calculatedDays);
       Leave updatedLeave = leaveRepository.save(l);
       notificationService.createNotification("Leave request #" + id + " has been updated. Status: " + l.getStatus());
 
@@ -208,6 +219,10 @@ public class LeaveServiceImpl implements LeaveService {
 
     // 4. Calculate requested leave duration using SOP rules
     int requestedDays = calculateDays(leave.getStartDate(), leave.getEndDate(), leave.getDaysCount());
+    if (requestedDays <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Invalid leave request: Selected date range contains 0 working days (weekends are excluded).");
+    }
     leave.setDaysCount(requestedDays);
 
     // 5. Verify employee balance & deduct
@@ -369,7 +384,9 @@ public class LeaveServiceImpl implements LeaveService {
     Integer newBalance = null;
     int refundedDays = 0;
     if ("Approved".equalsIgnoreCase(currentStatus)) {
-      refundedDays = calculateDays(leave.getStartDate(), leave.getEndDate(), leave.getDaysCount());
+      refundedDays = (leave.getDaysCount() != null && leave.getDaysCount() > 0)
+          ? leave.getDaysCount()
+          : calculateDays(leave.getStartDate(), leave.getEndDate(), 1);
       if (leave.getEmployeeName() != null) {
         User employee = userRepository.findByUsername(leave.getEmployeeName());
         if (employee != null) {
@@ -468,19 +485,50 @@ public class LeaveServiceImpl implements LeaveService {
     return events.map(LeaveAuditEventDTO::new);
   }
 
-  private int calculateDays(String startDate, String endDate, Integer fallbackDays) {
-    if (startDate != null && endDate != null && !startDate.isBlank() && !endDate.isBlank()) {
-      try {
-        LocalDate start = LocalDate.parse(startDate);
-        LocalDate end = LocalDate.parse(endDate);
-        if (end.isBefore(start)) {
-          return 1;
-        }
-        return (int) Math.max(1, ChronoUnit.DAYS.between(start, end) + 1);
-      } catch (Exception ignored) {
-      }
+  @Override
+  public int calculateWorkingDays(LocalDate start, LocalDate end) {
+    if (start == null || end == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date and end date must not be null.");
     }
-    return (fallbackDays != null && fallbackDays > 0) ? fallbackDays : 1;
+    if (end.isBefore(start)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Invalid date range: End date (" + end + ") cannot be before start date (" + start + ").");
+    }
+    long calendarDays = ChronoUnit.DAYS.between(start, end) + 1;
+    if (calendarDays > 366) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Leave request duration cannot exceed 366 calendar days in a single request.");
+    }
+    int workingDays = 0;
+    LocalDate curr = start;
+    while (!curr.isAfter(end)) {
+      DayOfWeek dow = curr.getDayOfWeek();
+      if (dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) {
+        workingDays++;
+      }
+      curr = curr.plusDays(1);
+    }
+    return workingDays;
+  }
+
+  @Override
+  public int calculateDays(String startDate, String endDate, Integer fallbackDays) {
+    if (startDate == null || startDate.isBlank() || endDate == null || endDate.isBlank()) {
+      if (fallbackDays != null && fallbackDays > 0) {
+        return fallbackDays;
+      }
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date and end date are required.");
+    }
+    LocalDate start;
+    LocalDate end;
+    try {
+      start = LocalDate.parse(startDate.trim());
+      end = LocalDate.parse(endDate.trim());
+    } catch (DateTimeParseException dtpe) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Invalid date format: " + dtpe.getMessage() + ". Expected format is YYYY-MM-DD.");
+    }
+    return calculateWorkingDays(start, end);
   }
 
   @Override

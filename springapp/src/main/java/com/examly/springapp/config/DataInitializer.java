@@ -33,18 +33,26 @@ public class DataInitializer implements CommandLineRunner {
     @Value("${ADMIN_INITIAL_PASSWORD:}")
     private String initialAdminPassword;
 
+    @Value("${app.bootstrap.dev-accounts:false}")
+    private boolean devAccountsEnabled;
+
     @Override
     public void run(String... args) {
-        boolean isProd = false;
-        if (environment != null && environment.getActiveProfiles() != null) {
-            isProd = Arrays.asList(environment.getActiveProfiles()).contains("prod");
-        }
-
-        if (isProd) {
+        if (isProductionEnvironment()) {
             handleProductionAdminProvisioning();
-        } else {
+        } else if (devAccountsEnabled) {
             handleDevelopmentSeed();
+        } else {
+            logger.info("Development account seeding disabled (app.bootstrap.dev-accounts=false).");
         }
+    }
+
+    private boolean isProductionEnvironment() {
+        if (environment == null || environment.getActiveProfiles() == null) {
+            return false;
+        }
+        return Arrays.stream(environment.getActiveProfiles())
+                .anyMatch(p -> p.equalsIgnoreCase("prod") || p.equalsIgnoreCase("production"));
     }
 
     private void handleProductionAdminProvisioning() {
