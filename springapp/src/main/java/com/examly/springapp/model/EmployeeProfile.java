@@ -47,6 +47,11 @@ public class EmployeeProfile {
     @Column(name = "department")
     private String department;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private Department departmentRef;
+
     @Column(name = "designation")
     private String designation;
 
@@ -127,6 +132,22 @@ public class EmployeeProfile {
 
     public void setDepartment(String department) {
         this.department = department;
+    }
+
+    public Department getDepartmentRef() {
+        return departmentRef;
+    }
+
+    public void setDepartmentRef(Department departmentRef) {
+        if (departmentRef != null && this.organization != null && departmentRef.getOrganization() != null) {
+            if (!this.organization.getId().equals(departmentRef.getOrganization().getId())) {
+                throw new IllegalArgumentException("Cross-organization department assignment is strictly prohibited.");
+            }
+        }
+        this.departmentRef = departmentRef;
+        if (departmentRef != null && departmentRef.getName() != null) {
+            this.department = departmentRef.getName();
+        }
     }
 
     public String getDesignation() {

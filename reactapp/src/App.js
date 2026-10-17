@@ -28,6 +28,11 @@ import WorkforceHub from "./components/WorkforceHub";
 import SecurityPrivacy from "./components/SecurityPrivacy";
 import OfficeOperations from "./components/OfficeOperations";
 import TeamCalendar from "./components/TeamCalendar";
+import PublicWebsite from "./components/PublicWebsite";
+import TenantSelection from "./components/TenantSelection";
+import OrganizationOnboarding from "./components/OrganizationOnboarding";
+import InvitationActivation from "./components/InvitationActivation";
+import OrganizationVerification from "./components/OrganizationVerification";
 
 const App = () => {
   return (
@@ -39,23 +44,52 @@ const App = () => {
   );
 };
 
+const RootRoute = () => {
+  const { user } = useAuth();
+  return user ? <Home /> : <PublicWebsite />;
+};
+
 const AppContent = () => {
   const { user } = useAuth();
   const location = useLocation();
-  const hideHeaderFooter = location.pathname === '/login' || location.pathname === '/signup';
+
+  const isPublicStandalone = 
+    location.pathname === '/login' || 
+    location.pathname === '/signup' || 
+    location.pathname === '/onboard' || 
+    location.pathname === '/activate' || 
+    location.pathname === '/verify-organization' ||
+    location.pathname === '/verify-org' ||
+    location.pathname === '/verification-pending' ||
+    location.pathname === '/select-tenant' ||
+    (!user && location.pathname === '/');
 
   return (
     <div className="app-container">
-      {!hideHeaderFooter && <Header />}
+      {!isPublicStandalone && <Header />}
       
       <div style={{ display: 'flex', minHeight: 'calc(100vh - 70px)', flex: 1 }}>
-        {!hideHeaderFooter && user && <Sidebar />}
+        {!isPublicStandalone && user && <Sidebar />}
         
         <main style={{ flex: 1, minWidth: 0 }}>
           <Routes>
-            <Route path="/" element={<ProtectedRoute component={Home} />} />
+            {/* Public or Home Root */}
+            <Route path="/" element={<RootRoute />} />
+
+            {/* Public Auth & Onboarding Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/onboard" element={<OrganizationOnboarding />} />
+            <Route path="/activate" element={<InvitationActivation />} />
+            <Route path="/verify-organization" element={<OrganizationVerification />} />
+            <Route path="/verify-org" element={<OrganizationVerification />} />
+            <Route path="/verification-pending" element={<OrganizationVerification isPendingScreen={true} />} />
+
+            {/* Tenant Selection */}
+            <Route
+              path="/select-tenant"
+              element={<ProtectedRoute component={TenantSelection} />}
+            />
             
             {/* WorkNest / Modern Modules */}
             <Route
@@ -87,7 +121,7 @@ const AppContent = () => {
               element={<ProtectedRoute component={TeamCalendar} />}
             />
 
-            {/* Existing Core Routes Preserved */}
+            {/* Core Routes Preserved */}
             <Route
               path="/about"
               element={<ProtectedRoute component={About} />}
@@ -126,8 +160,8 @@ const AppContent = () => {
         </main>
       </div>
 
-      {user && !hideHeaderFooter && <AiAssistant />}
-      {!hideHeaderFooter && <Footer />}
+      {user && !isPublicStandalone && <AiAssistant />}
+      {!isPublicStandalone && <Footer />}
     </div>
   );
 };

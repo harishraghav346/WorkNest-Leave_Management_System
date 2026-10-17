@@ -1,5 +1,7 @@
 package com.examly.springapp.service;
 
+import com.examly.springapp.model.Department;
+import com.examly.springapp.model.EmployeeProfile;
 import com.examly.springapp.model.Leave;
 import com.examly.springapp.model.LeaveAuditEvent;
 import com.examly.springapp.model.LeaveAuditEventDTO;
@@ -7,6 +9,8 @@ import com.examly.springapp.model.Organization;
 import com.examly.springapp.model.TeamCalendarLeaveDTO;
 import com.examly.springapp.model.TenantContext;
 import com.examly.springapp.model.User;
+import com.examly.springapp.repository.DepartmentRepository;
+import com.examly.springapp.repository.EmployeeProfileRepository;
 import com.examly.springapp.repository.LeaveAuditEventRepository;
 import com.examly.springapp.repository.LeaveRepository;
 import com.examly.springapp.repository.OrganizationRepository;
@@ -53,6 +57,12 @@ public class LeaveServiceImpl implements LeaveService {
   @Autowired
   private OrganizationRepository organizationRepository;
 
+  @Autowired
+  private DepartmentRepository departmentRepository;
+
+  @Autowired
+  private EmployeeProfileRepository employeeProfileRepository;
+
   @Override
   public Leave createLeave(Leave leave) {
     if (leave.getStatus() == null || leave.getStatus().isBlank()) {
@@ -76,6 +86,18 @@ public class LeaveServiceImpl implements LeaveService {
       orgId = ctx.getOrganizationId();
       Organization org = organizationRepository.findById(orgId).orElse(null);
       leave.setOrganization(org);
+
+      // Department scoping: resolve from employee profile first
+      Optional<EmployeeProfile> profileOpt = employeeProfileRepository
+          .findByOrganizationIdAndMembershipUserUsername(orgId, leave.getEmployeeName());
+      if (profileOpt.isPresent() && profileOpt.get().getDepartmentRef() != null) {
+        leave.setDepartment(profileOpt.get().getDepartmentRef());
+      } else if (leave.getDepartment() != null && leave.getDepartment().getId() != null) {
+        // Client supplied department ID - verify it belongs to this tenant organization
+        Department clientDept = departmentRepository.findByIdAndOrganizationId(leave.getDepartment().getId(), orgId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Department does not belong to this organization."));
+        leave.setDepartment(clientDept);
+      }
     }
 
     Leave newLeave = leaveRepository.save(leave);
@@ -103,7 +125,20 @@ public class LeaveServiceImpl implements LeaveService {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
     if (contextOpt.isPresent()) {
-      return leaveRepository.findByOrganizationId(contextOpt.get().getOrganizationId());
+      TenantContext ctx = contextOpt.get();
+      if (ctx.isManager()) {
+        List<Department> managedDepts = departmentRepository.findByOrganizationIdAndManagerMembershipId(ctx.getOrganizationId(), ctx.getMembershipId());
+        if (!managedDepts.isEmpty()) {
+          List<Long> deptIds = managedDepts.stream().map(Department::getId).toList();
+          return leaveRepository.findByOrganizationIdAndDepartmentIdInOrEmployeeNameIgnoreCase(ctx.getOrganizationId(), deptIds, ctx.getUsername());
+        } else if (departmentRepository.countByOrganizationId(ctx.getOrganizationId()) > 0) {
+          return leaveRepository.findByOrganizationIdAndEmployeeNameIgnoreCase(ctx.getOrganizationId(), ctx.getUsername());
+        }
+      }
+      if (!ctx.hasAdminOrHrPrivileges()) {
+        return leaveRepository.findByOrganizationIdAndEmployeeNameIgnoreCase(ctx.getOrganizationId(), ctx.getUsername());
+      }
+      return leaveRepository.findByOrganizationId(ctx.getOrganizationId());
     }
     // Missing tenant context: fail closed against tenant data
     if (auth != null && auth.getAuthorities() != null) {
@@ -140,12 +175,6 @@ public class LeaveServiceImpl implements LeaveService {
       boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
           auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
       if (isPlatformAdmin) {
-        return null;
-      }
-      boolean isLegacyAdmin = (auth != null && auth.getAuthorities() != null &&
-          auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
-      boolean isOwner = (auth != null && leave.getEmployeeName() != null && leave.getEmployeeName().equalsIgnoreCase(auth.getName()));
-      if (!isLegacyAdmin && !isOwner) {
         return null;
       }
     }
@@ -271,7 +300,21 @@ public class LeaveServiceImpl implements LeaveService {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
     if (contextOpt.isPresent()) {
-      return leaveRepository.findByOrganizationId(contextOpt.get().getOrganizationId(), PageRequest.of(page, size));
+      TenantContext ctx = contextOpt.get();
+      PageRequest pageRequest = PageRequest.of(page, size);
+      if (ctx.isManager()) {
+        List<Department> managedDepts = departmentRepository.findByOrganizationIdAndManagerMembershipId(ctx.getOrganizationId(), ctx.getMembershipId());
+        if (!managedDepts.isEmpty()) {
+          List<Long> deptIds = managedDepts.stream().map(Department::getId).toList();
+          return leaveRepository.findByOrganizationIdAndDepartmentIdInOrEmployeeNameIgnoreCase(ctx.getOrganizationId(), deptIds, ctx.getUsername(), pageRequest);
+        } else if (departmentRepository.countByOrganizationId(ctx.getOrganizationId()) > 0) {
+          return leaveRepository.findByOrganizationIdAndEmployeeNameIgnoreCase(ctx.getOrganizationId(), ctx.getUsername(), pageRequest);
+        }
+      }
+      if (!ctx.hasAdminOrHrPrivileges()) {
+        return leaveRepository.findByOrganizationIdAndEmployeeNameIgnoreCase(ctx.getOrganizationId(), ctx.getUsername(), pageRequest);
+      }
+      return leaveRepository.findByOrganizationId(ctx.getOrganizationId(), pageRequest);
     }
     if (auth != null && auth.getAuthorities() != null) {
       boolean isPlatformAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN"));
@@ -353,6 +396,26 @@ public class LeaveServiceImpl implements LeaveService {
       if (!ctx.hasApprovalPrivileges()) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
             "Unauthorized: Only administrators or managers can approve leave requests.");
+      }
+      if (ctx.isManager()) {
+        List<Department> managedDepts = departmentRepository.findByOrganizationIdAndManagerMembershipId(ctx.getOrganizationId(), ctx.getMembershipId());
+        if (!managedDepts.isEmpty()) {
+          // Authoritative department resolution: resolve current department from EmployeeProfile
+          Optional<EmployeeProfile> applicantProf = employeeProfileRepository
+              .findByOrganizationIdAndMembershipUserUsername(ctx.getOrganizationId(), leave.getEmployeeName());
+          Department currentDept = applicantProf.map(EmployeeProfile::getDepartmentRef).orElse(null);
+          if (currentDept == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Access denied: Applicant has no current department assignment. Manager cannot approve.");
+          }
+          boolean authorized = managedDepts.stream().anyMatch(d -> d.getId().equals(currentDept.getId()));
+          if (!authorized) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Access denied: Manager is not authorized to approve leave requests outside their currently managed department(s).");
+          }
+        } else if (departmentRepository.countByOrganizationId(ctx.getOrganizationId()) > 0) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Manager is not assigned to manage any department.");
+        }
       }
     } else {
       if (leave.getOrganization() != null) {
@@ -447,6 +510,26 @@ public class LeaveServiceImpl implements LeaveService {
       if (!ctx.hasApprovalPrivileges()) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN,
             "Unauthorized: Only administrators or managers can reject leave requests.");
+      }
+      if (ctx.isManager()) {
+        List<Department> managedDepts = departmentRepository.findByOrganizationIdAndManagerMembershipId(ctx.getOrganizationId(), ctx.getMembershipId());
+        if (!managedDepts.isEmpty()) {
+          // Authoritative department resolution: resolve current department from EmployeeProfile
+          Optional<EmployeeProfile> applicantProf = employeeProfileRepository
+              .findByOrganizationIdAndMembershipUserUsername(ctx.getOrganizationId(), leave.getEmployeeName());
+          Department currentDept = applicantProf.map(EmployeeProfile::getDepartmentRef).orElse(null);
+          if (currentDept == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Access denied: Applicant has no current department assignment. Manager cannot reject.");
+          }
+          boolean authorized = managedDepts.stream().anyMatch(d -> d.getId().equals(currentDept.getId()));
+          if (!authorized) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Access denied: Manager is not authorized to reject leave requests outside their currently managed department(s).");
+          }
+        } else if (departmentRepository.countByOrganizationId(ctx.getOrganizationId()) > 0) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Manager is not assigned to manage any department.");
+        }
       }
     } else {
       if (leave.getOrganization() != null) {
@@ -821,22 +904,29 @@ public class LeaveServiceImpl implements LeaveService {
     Optional<TenantContext> contextOpt = (tenantContextService != null) ? tenantContextService.resolveTenantContext(auth) : Optional.empty();
     List<Leave> leaves;
     if (contextOpt.isPresent()) {
-      Long orgId = contextOpt.get().getOrganizationId();
-      leaves = leaveRepository.findOverlappingActiveLeavesByOrg(orgId, start.trim(), end.trim());
-      isAdmin = contextOpt.get().hasAdminOrHrPrivileges();
+      TenantContext ctx = contextOpt.get();
+      Long orgId = ctx.getOrganizationId();
+      if (ctx.isManager()) {
+        List<Department> managedDepts = departmentRepository.findByOrganizationIdAndManagerMembershipId(orgId, ctx.getMembershipId());
+        if (!managedDepts.isEmpty()) {
+          List<Long> deptIds = managedDepts.stream().map(Department::getId).toList();
+          leaves = leaveRepository.findOverlappingActiveLeavesByOrgAndDepartmentsOrEmployee(orgId, deptIds, ctx.getUsername(), start.trim(), end.trim());
+        } else if (departmentRepository.countByOrganizationId(orgId) > 0) {
+          leaves = leaveRepository.findByOrganizationIdAndEmployeeNameIgnoreCase(orgId, ctx.getUsername());
+        } else {
+          leaves = leaveRepository.findOverlappingActiveLeavesByOrg(orgId, start.trim(), end.trim());
+        }
+      } else {
+        leaves = leaveRepository.findOverlappingActiveLeavesByOrg(orgId, start.trim(), end.trim());
+      }
+      isAdmin = ctx.hasAdminOrHrPrivileges();
     } else {
       boolean isPlatformAdmin = (auth != null && auth.getAuthorities() != null &&
           auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")));
       if (isPlatformAdmin) {
         leaves = Collections.emptyList();
       } else {
-        boolean isLegacyAdmin = (auth != null && auth.getAuthorities() != null &&
-            auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
-        if (isLegacyAdmin) {
-          leaves = leaveRepository.findOverlappingActiveLeavesUnassigned(start.trim(), end.trim());
-        } else {
-          leaves = Collections.emptyList();
-        }
+        leaves = leaveRepository.findOverlappingActiveLeavesUnassigned(start.trim(), end.trim());
       }
     }
 
@@ -850,12 +940,19 @@ public class LeaveServiceImpl implements LeaveService {
       boolean isPending = "Pending".equalsIgnoreCase(status);
 
       // Pending visibility rules:
-      // Administrators can see all team pending and approved requests.
+      // Administrators and authorized department managers can see pending requests.
       // Regular employees can see all approved team requests, plus their own pending requests.
       if (isPending) {
         if (!isAdmin) {
-          if (currentUser == null || leave.getEmployeeName() == null || !currentUser.equalsIgnoreCase(leave.getEmployeeName())) {
-            continue; // Exclude colleague's pending leaves from non-admin employee view
+          boolean isManagerOfLeave = false;
+          if (contextOpt.isPresent() && contextOpt.get().isManager() && leave.getDepartment() != null) {
+            List<Department> managedDepts = departmentRepository.findByOrganizationIdAndManagerMembershipId(contextOpt.get().getOrganizationId(), contextOpt.get().getMembershipId());
+            isManagerOfLeave = managedDepts.stream().anyMatch(d -> d.getId().equals(leave.getDepartment().getId()));
+          }
+          if (!isManagerOfLeave) {
+            if (currentUser == null || leave.getEmployeeName() == null || !currentUser.equalsIgnoreCase(leave.getEmployeeName())) {
+              continue; // Exclude colleague's pending leaves from non-admin employee view
+            }
           }
         }
       }

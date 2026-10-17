@@ -34,6 +34,11 @@ public class Leave {
   @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
   private Organization organization;
 
+  @jakarta.persistence.ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+  @jakarta.persistence.JoinColumn(name = "department_id")
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+  private Department department;
+
   public Leave() {
   }
 
@@ -157,5 +162,15 @@ public class Leave {
   }
   public Long getOrganizationId() {
     return organization != null ? organization.getId() : null;
+  }
+
+  public Department getDepartment() {
+    return department;
+  }
+  public void setDepartment(Department department) {
+    this.department = department;
+  }
+  public Long getDepartmentId() {
+    return department != null ? department.getId() : null;
   }
 }

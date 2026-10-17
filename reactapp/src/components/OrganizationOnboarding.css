@@ -1,0 +1,204 @@
+/* Organization Onboarding Component Styles */
+.onboarding-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 15%, #e2e8f0 0%, #f8fafc 100%);
+  padding: 3rem 1rem;
+}
+
+.onboarding-card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  width: 100%;
+  max-width: 640px;
+  padding: 3rem;
+}
+
+.onboarding-header {
+  text-align: center;
+  margin-bottom: 2.25rem;
+}
+
+.onboarding-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+  color: #ffffff;
+  font-size: 1.6rem;
+  font-weight: 900;
+  margin-bottom: 1rem;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.3);
+}
+
+.onboarding-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.onboarding-subtitle {
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.onboarding-section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 1.75rem 0 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 0.5rem;
+}
+
+.form-group-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 1.25rem;
+}
+
+.form-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-input {
+  padding: 0.75rem 1rem;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.form-input-error {
+  border-color: #ef4444;
+}
+
+.form-hint {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.slug-preview {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.slug-prefix {
+  padding: 0.75rem 0.85rem;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.88rem;
+  border-right: 1px solid #cbd5e1;
+  user-select: none;
+}
+
+.slug-input {
+  border: none;
+  outline: none;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  flex: 1;
+  color: #0f172a;
+  background: transparent;
+}
+
+.btn-onboard-submit {
+  width: 100%;
+  padding: 0.95rem;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+  transition: all 0.2s ease;
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-onboard-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 25px rgba(37, 99, 235, 0.45);
+}
+
+.btn-onboard-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.onboarding-footer {
+  text-align: center;
+  margin-top: 2rem;
+  font-size: 0.92rem;
+  color: #64748b;
+}
+
+.onboarding-footer a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.onboarding-footer a:hover {
+  text-decoration: underline;
+}
+
+.onboard-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .form-group-row {
+    grid-template-columns: 1fr;
+  }
+  .onboarding-card {
+    padding: 2rem 1.5rem;
+  }
+}

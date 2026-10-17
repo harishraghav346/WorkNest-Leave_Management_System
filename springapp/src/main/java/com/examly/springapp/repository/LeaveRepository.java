@@ -33,6 +33,15 @@ public interface LeaveRepository extends JpaRepository<Leave, Long> {
     @Query("SELECT l FROM Leave l WHERE l.id = :id AND l.organization.id = :organizationId")
     Optional<Leave> findByIdAndOrganizationId(@Param("id") Long id, @Param("organizationId") Long organizationId);
 
+    @Query("SELECT l FROM Leave l WHERE l.organization.id = :organizationId AND (l.department.id IN :departmentIds OR LOWER(l.employeeName) = LOWER(:employeeName))")
+    List<Leave> findByOrganizationIdAndDepartmentIdInOrEmployeeNameIgnoreCase(@Param("organizationId") Long organizationId, @Param("departmentIds") List<Long> departmentIds, @Param("employeeName") String employeeName);
+
+    @Query("SELECT l FROM Leave l WHERE l.organization.id = :organizationId AND (l.department.id IN :departmentIds OR LOWER(l.employeeName) = LOWER(:employeeName))")
+    Page<Leave> findByOrganizationIdAndDepartmentIdInOrEmployeeNameIgnoreCase(@Param("organizationId") Long organizationId, @Param("departmentIds") List<Long> departmentIds, @Param("employeeName") String employeeName, Pageable pageable);
+
+    @Query("SELECT l FROM Leave l WHERE l.organization.id = :organizationId AND (l.department.id IN :departmentIds OR LOWER(l.employeeName) = LOWER(:employeeName)) AND l.startDate IS NOT NULL AND l.endDate IS NOT NULL AND l.startDate <= :rangeEnd AND l.endDate >= :rangeStart AND l.status IN ('Approved', 'Pending') ORDER BY l.startDate ASC, l.employeeName ASC")
+    List<Leave> findOverlappingActiveLeavesByOrgAndDepartmentsOrEmployee(@Param("organizationId") Long organizationId, @Param("departmentIds") List<Long> departmentIds, @Param("employeeName") String employeeName, @Param("rangeStart") String rangeStart, @Param("rangeEnd") String rangeEnd);
+
     // Scoped calendar query
     @Query("SELECT l FROM Leave l WHERE l.organization.id = :organizationId AND l.startDate IS NOT NULL AND l.endDate IS NOT NULL AND l.startDate <= :rangeEnd AND l.endDate >= :rangeStart AND l.status IN ('Approved', 'Pending') ORDER BY l.startDate ASC, l.employeeName ASC")
     List<Leave> findOverlappingActiveLeavesByOrg(@Param("organizationId") Long organizationId, @Param("rangeStart") String rangeStart, @Param("rangeEnd") String rangeEnd);

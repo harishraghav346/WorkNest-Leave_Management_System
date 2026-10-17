@@ -17,7 +17,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
-import java.util.Map;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,7 +68,6 @@ public class WorkNestPhaseD2HardeningAndMigrationTests {
 
     private Organization orgAlpha;
     private Organization orgBeta;
-    private Organization suspendedOrg;
 
     private User alphaAdmin;
     private User alphaEmployee;
@@ -84,7 +82,6 @@ public class WorkNestPhaseD2HardeningAndMigrationTests {
     private String alphaEmployeeToken;
     private String alphaManagerToken;
     private String betaAdminToken;
-    private String betaEmployeeToken;
     private String platformAdminToken;
     private String inactiveMemberToken;
     private String multiOrgToken;
@@ -101,7 +98,7 @@ public class WorkNestPhaseD2HardeningAndMigrationTests {
         // 1. Create Organizations
         orgAlpha = organizationRepository.save(new Organization("Alpha Corp " + ts, "alpha-" + ts, "ACTIVE", Instant.now()));
         orgBeta = organizationRepository.save(new Organization("Beta LLC " + ts, "beta-" + ts, "ACTIVE", Instant.now()));
-        suspendedOrg = organizationRepository.save(new Organization("Suspended Co " + ts, "suspended-" + ts, "SUSPENDED", Instant.now()));
+        organizationRepository.save(new Organization("Suspended Co " + ts, "suspended-" + ts, "SUSPENDED", Instant.now()));
 
         // 2. Org Alpha Users
         alphaAdmin = userRepository.save(new User("alpha_admin_" + ts, passwordEncoder.encode("pass"), "employee"));
@@ -133,7 +130,6 @@ public class WorkNestPhaseD2HardeningAndMigrationTests {
         betaEmployee.setLeaveBalance(18);
         userRepository.save(betaEmployee);
         membershipRepository.save(new OrganizationMembership(orgBeta, betaEmployee, "EMPLOYEE", "ACTIVE", Instant.now()));
-        betaEmployeeToken = "Bearer " + jwtUtil.generateToken(betaEmployee.getUsername(), "EMPLOYEE");
 
         // 4. Platform Admin (no organization membership)
         platformAdmin = userRepository.save(new User("plat_admin_" + ts, passwordEncoder.encode("pass"), "PLATFORM_ADMIN"));

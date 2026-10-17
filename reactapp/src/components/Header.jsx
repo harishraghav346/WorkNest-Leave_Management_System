@@ -9,12 +9,13 @@ import {
   FaQuestionCircle, 
   FaCalendarAlt,
   FaCogs,
-  FaUserCheck
+  FaUserCheck,
+  FaBuilding
 } from 'react-icons/fa';
 import './Header.css';
 
 const Header = () => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, organization, tenantRole, memberships, logout, isAdmin } = useAuth();
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const navigate = useNavigate();
 
@@ -26,43 +27,81 @@ const Header = () => {
   return (
     <header className="app-header">
       {/* Brand Logo with WorkNest Badge */}
-      <NavLink to="/" className="logo-container">
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <NavLink to="/" className="logo-container">
           <div style={{
-            background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
-            color: '#ffffff',
-            fontWeight: 900,
-            fontSize: '1.1rem',
-            padding: '4px 10px',
-            borderRadius: '6px',
-            letterSpacing: '0.05em'
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}>
-            W
+            <div style={{
+              background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+              color: '#ffffff',
+              fontWeight: 900,
+              fontSize: '1.1rem',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              letterSpacing: '0.05em'
+            }}>
+              W
+            </div>
+            <span style={{
+              fontWeight: 800,
+              fontSize: '1.35rem',
+              color: '#0f172a',
+              letterSpacing: '0.05em'
+            }}>
+              WorkNest
+            </span>
+            <span style={{
+              fontSize: '0.72rem',
+              background: 'rgba(2, 132, 199, 0.12)',
+              color: '#0284c7',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              fontWeight: 700
+            }}>
+              HRMS
+            </span>
           </div>
-          <span style={{
-            fontWeight: 800,
-            fontSize: '1.35rem',
-            color: '#0f172a',
-            letterSpacing: '0.05em'
+        </NavLink>
+
+        {organization && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '6px',
+            padding: '4px 10px',
+            fontSize: '0.82rem',
+            color: '#1e293b',
+            fontWeight: 600
           }}>
-            WorkNest
-          </span>
-          <span style={{
-            fontSize: '0.72rem',
-            background: 'rgba(2, 132, 199, 0.12)',
-            color: '#0284c7',
-            padding: '2px 8px',
-            borderRadius: '9999px',
-            fontWeight: 700
-          }}>
-            HRMS
-          </span>
-        </div>
-      </NavLink>
+            <FaBuilding style={{ color: '#2563eb' }} />
+            <span>{organization.name || organization.slug}</span>
+            {memberships && memberships.length > 1 && (
+              <Link
+                to="/select-tenant"
+                style={{
+                  marginLeft: '4px',
+                  fontSize: '0.75rem',
+                  color: '#2563eb',
+                  textDecoration: 'none',
+                  background: '#eff6ff',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  fontWeight: 700
+                }}
+                title="Switch Organization"
+              >
+                Switch
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Main Top Navigation */}
       <nav className="main-nav">
@@ -207,7 +246,7 @@ const Header = () => {
               </div>
               <div className="user-info-text">
                 <span className="user-name-label">{user.name || user.username}</span>
-                <span className="user-role-pill">{user.role || "Employee"}</span>
+                <span className="user-role-pill">{tenantRole || user.role || "Employee"}</span>
               </div>
             </div>
 

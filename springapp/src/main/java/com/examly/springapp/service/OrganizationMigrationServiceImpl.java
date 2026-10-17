@@ -31,6 +31,8 @@ public class OrganizationMigrationServiceImpl implements OrganizationMigrationSe
     public static final String DEFAULT_ORG_NAME = "WorkNest Primary Workspace";
     public static final String DEFAULT_ORG_SLUG = "worknest-primary";
 
+    private final java.util.concurrent.atomic.AtomicBoolean isMigrationRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
+
     @Autowired
     private OrganizationRepository organizationRepository;
 
@@ -156,8 +158,25 @@ public class OrganizationMigrationServiceImpl implements OrganizationMigrationSe
                         unresolvedLeaves++;
                         report.getPlannedActions().add("Leave #" + leave.getId() + " references non-existent employee '" + emp + "' -> Unresolved");
                     } else {
-                        leavesPending++;
-                        report.getPlannedActions().add("Leave #" + leave.getId() + " ('" + emp + "') -> Will associate with default organization '" + DEFAULT_ORG_NAME + "'");
+                        List<OrganizationMembership> userMems = membershipRepository.findAllByUserId(user.getId());
+                        boolean belongsToOtherOrg = userMems.stream()
+                                .anyMatch(m -> {
+                                    if (m.getOrganization() == null) return false;
+                                    if (targetOrgId != null) {
+                                        return !targetOrgId.equals(m.getOrganization().getId());
+                                    } else {
+                                        return !DEFAULT_ORG_SLUG.equals(m.getOrganization().getSlug());
+                                    }
+                                });
+                        boolean hasMultipleMemberships = userMems.size() > 1;
+
+                        if (belongsToOtherOrg || hasMultipleMemberships) {
+                            unresolvedLeaves++;
+                            report.getPlannedActions().add("Leave #" + leave.getId() + " ('" + emp + "') belongs to user with cross-organization or ambiguous memberships -> Unresolved");
+                        } else {
+                            leavesPending++;
+                            report.getPlannedActions().add("Leave #" + leave.getId() + " ('" + emp + "') -> Will associate with default organization '" + DEFAULT_ORG_NAME + "'");
+                        }
                     }
                 }
             }
@@ -206,8 +225,25 @@ public class OrganizationMigrationServiceImpl implements OrganizationMigrationSe
                 if (recipient != null && !recipient.isBlank()) {
                     User user = userRepository.findByUsername(recipient);
                     if (user != null) {
-                        notificationsPending++;
-                        report.getPlannedActions().add("Notification #" + n.getId() + " for recipient '" + recipient + "' -> Will associate with default organization");
+                        List<OrganizationMembership> userMems = membershipRepository.findAllByUserId(user.getId());
+                        boolean belongsToOtherOrg = userMems.stream()
+                                .anyMatch(m -> {
+                                    if (m.getOrganization() == null) return false;
+                                    if (targetOrgId != null) {
+                                        return !targetOrgId.equals(m.getOrganization().getId());
+                                    } else {
+                                        return !DEFAULT_ORG_SLUG.equals(m.getOrganization().getSlug());
+                                    }
+                                });
+                        boolean hasMultipleMemberships = userMems.size() > 1;
+
+                        if (belongsToOtherOrg || hasMultipleMemberships) {
+                            unresolvedNotifications++;
+                            report.getPlannedActions().add("Notification #" + n.getId() + " recipient '" + recipient + "' belongs to another/multiple organizations -> Unresolved");
+                        } else {
+                            notificationsPending++;
+                            report.getPlannedActions().add("Notification #" + n.getId() + " for recipient '" + recipient + "' -> Will associate with default organization");
+                        }
                     } else {
                         unresolvedNotifications++;
                         report.getPlannedActions().add("Notification #" + n.getId() + " recipient '" + recipient + "' not found -> Unresolved");
@@ -246,6 +282,17 @@ public class OrganizationMigrationServiceImpl implements OrganizationMigrationSe
     @Override
     @Transactional
     public OrganizationMigrationReport executeMigration() {
+        if (!isMigrationRunning.compareAndSet(false, true)) {
+            throw new IllegalStateException("Migration execution rejected: Another migration is currently in progress. Concurrent execution is prohibited.");
+        }
+        try {
+            return doExecuteMigration();
+        } finally {
+            isMigrationRunning.set(false);
+        }
+    }
+
+    private OrganizationMigrationReport doExecuteMigration() {
         OrganizationMigrationReport report = new OrganizationMigrationReport();
         report.setDryRun(false);
         report.setOrganizationName(DEFAULT_ORG_NAME);
@@ -386,9 +433,18 @@ public class OrganizationMigrationServiceImpl implements OrganizationMigrationSe
                     if (user == null) {
                         unresolvedLeaves++;
                     } else {
-                        leave.setOrganization(org);
-                        leaveRepository.saveAndFlush(leave);
-                        leavesMigrated++;
+                        List<OrganizationMembership> userMems = membershipRepository.findAllByUserId(user.getId());
+                        boolean belongsToOtherOrg = userMems.stream()
+                                .anyMatch(m -> m.getOrganization() != null && org.getId() != null && !org.getId().equals(m.getOrganization().getId()));
+                        boolean hasMultipleMemberships = userMems.size() > 1;
+
+                        if (belongsToOtherOrg || hasMultipleMemberships) {
+                            unresolvedLeaves++;
+                        } else {
+                            leave.setOrganization(org);
+                            leaveRepository.saveAndFlush(leave);
+                            leavesMigrated++;
+                        }
                     }
                 }
             }
@@ -439,9 +495,18 @@ public class OrganizationMigrationServiceImpl implements OrganizationMigrationSe
                 if (recipient != null && !recipient.isBlank()) {
                     User user = userRepository.findByUsername(recipient);
                     if (user != null) {
-                        n.setOrganizationId(org.getId());
-                        notificationRepository.saveAndFlush(n);
-                        notificationsMigrated++;
+                        List<OrganizationMembership> userMems = membershipRepository.findAllByUserId(user.getId());
+                        boolean belongsToOtherOrg = userMems.stream()
+                                .anyMatch(m -> m.getOrganization() != null && org.getId() != null && !org.getId().equals(m.getOrganization().getId()));
+                        boolean hasMultipleMemberships = userMems.size() > 1;
+
+                        if (belongsToOtherOrg || hasMultipleMemberships) {
+                            unresolvedNotifications++;
+                        } else {
+                            n.setOrganizationId(org.getId());
+                            notificationRepository.saveAndFlush(n);
+                            notificationsMigrated++;
+                        }
                     } else {
                         unresolvedNotifications++;
                     }

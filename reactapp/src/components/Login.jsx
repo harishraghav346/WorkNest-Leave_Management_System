@@ -22,7 +22,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { login } = useAuth();
+  const { login, selectTenant, setMemberships } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -46,6 +46,19 @@ const Login = () => {
 
       if (response.data) {
         const data = response.data;
+        if (data.requiresTenantSelection) {
+          login({
+            id: data.id,
+            name: data.username,
+            username: data.username,
+            role: data.role
+          }, data.token);
+          setMemberships(data.memberships || []);
+          localStorage.setItem("memberships", JSON.stringify(data.memberships || []));
+          navigate('/select-tenant');
+          return;
+        }
+
         login({
           id: data.id,
           name: data.username,
@@ -53,8 +66,12 @@ const Login = () => {
           role: data.role
         }, data.token);
 
+        if (data.organization) {
+          selectTenant(data.organization, data.role, data.token);
+        }
+
         // Immediate routing
-        navigate(data.role === 'admin' ? '/admin/dashboard' : '/');
+        navigate(data.role === 'admin' || data.role === 'ORG_ADMIN' ? '/admin/dashboard' : '/dashboard');
       }
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.response?.data || "Invalid credentials. Please verify username and password.";
@@ -228,9 +245,13 @@ const Login = () => {
             </button>
           </form>
 
-          <div className="auth-navigation-footer">
-            Don't have an account? 
-            <Link to="/signup">Create account</Link>
+          <div className="auth-navigation-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+            <div>
+              Don't have an account? <Link to="/signup">Create account</Link>
+            </div>
+            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+              Company Admin? <Link to="/onboard" style={{ fontWeight: 600 }}>Onboard Organization</Link> • Invited? <Link to="/activate" style={{ fontWeight: 600 }}>Activate Token</Link>
+            </div>
           </div>
         </div>
 

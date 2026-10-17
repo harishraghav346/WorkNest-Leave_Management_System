@@ -99,7 +99,14 @@ public class SecurityConfig {
                 })
             )
             .authorizeHttpRequests(authorize -> {
-                authorize.requestMatchers("/auth/login", "/auth/register").permitAll();
+                authorize.requestMatchers(
+                        "/auth/login", "/auth/register",
+                        "/auth/onboard-organization", "/auth/onboard",
+                        "/auth/verify-organization", "/auth/verify", "/api/onboarding/verify",
+                        "/auth/resend-verification",
+                        "/auth/invitations/accept", "/invitations/activate",
+                        "/error"
+                ).permitAll();
                 authorize.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll();
                 if (!finalIsProd) {
                     authorize.requestMatchers("/h2-console/**").permitAll();

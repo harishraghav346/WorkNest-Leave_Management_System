@@ -20,10 +20,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.examly.springapp.model.Department;
+import com.examly.springapp.model.EmployeeProfile;
 import com.examly.springapp.model.Leave;
 import com.examly.springapp.model.LeaveAuditEventDTO;
 import com.examly.springapp.model.TeamCalendarLeaveDTO;
 import com.examly.springapp.model.TenantContext;
+import com.examly.springapp.repository.DepartmentRepository;
+import com.examly.springapp.repository.EmployeeProfileRepository;
 import com.examly.springapp.repository.LeaveRepository;
 import com.examly.springapp.service.LeaveService;
 import com.examly.springapp.service.TenantContextService;
@@ -41,12 +45,21 @@ public class LeaveController {
   @Autowired
   private TenantContextService tenantContextService;
 
+  @Autowired
+  private DepartmentRepository departmentRepository;
+
+  @Autowired
+  private EmployeeProfileRepository employeeProfileRepository;
+
   @GetMapping
   public List<Leave> getAllLeave(Authentication authentication) {
     if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
       Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
       if (contextOpt.isPresent()) {
         TenantContext ctx = contextOpt.get();
+        if (ctx.isManager()) {
+          return leaveService.getAllLeave();
+        }
         if (!ctx.hasAdminOrHrPrivileges()) {
           return leaveService.getLeavesForUser(authentication.getName());
         }
@@ -94,11 +107,33 @@ public class LeaveController {
     }
     if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
       Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
-      boolean isAdmin = contextOpt.map(TenantContext::hasAdminOrHrPrivileges)
-          .orElseGet(() -> authentication.getAuthorities().stream()
-              .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN")));
-      if (!isAdmin && leave.getEmployeeName() != null && !leave.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
+      if (contextOpt.isPresent()) {
+        TenantContext ctx = contextOpt.get();
+        if (ctx.hasAdminOrHrPrivileges()) {
+          return ResponseEntity.ok(leave);
+        }
+        if (leave.getEmployeeName() != null && leave.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
+          return ResponseEntity.ok(leave);
+        }
+        if (ctx.isManager()) {
+          List<Department> managedDepts = departmentRepository.findByOrganizationIdAndManagerMembershipId(ctx.getOrganizationId(), ctx.getMembershipId());
+          if (!managedDepts.isEmpty() && leave.getEmployeeName() != null) {
+            Optional<EmployeeProfile> profileOpt = employeeProfileRepository
+                .findByOrganizationIdAndMembershipUserUsername(ctx.getOrganizationId(), leave.getEmployeeName());
+            Department currentDept = profileOpt.map(EmployeeProfile::getDepartmentRef).orElse(null);
+            if (currentDept != null && managedDepts.stream().anyMatch(d -> d.getId().equals(currentDept.getId()))) {
+              return ResponseEntity.ok(leave);
+            }
+          }
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: Manager is not authorized to view leave records outside their managed department(s).");
+        }
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You can only view your own leave records.");
+      } else {
+        boolean isAdmin = authentication.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+        if (!isAdmin && leave.getEmployeeName() != null && !leave.getEmployeeName().equalsIgnoreCase(authentication.getName())) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied: You can only view your own leave records.");
+        }
       }
     }
     return ResponseEntity.ok(leave);
@@ -225,6 +260,9 @@ public class LeaveController {
       Optional<TenantContext> contextOpt = tenantContextService.resolveTenantContext(authentication);
       if (contextOpt.isPresent()) {
         TenantContext ctx = contextOpt.get();
+        if (ctx.isManager()) {
+          return leaveService.getLeavesPaginated(page, size);
+        }
         if (!ctx.hasAdminOrHrPrivileges()) {
           return leaveService.getLeavesForUserPaginated(authentication.getName(), page, size);
         }

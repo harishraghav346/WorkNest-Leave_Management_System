@@ -2,6 +2,7 @@ package com.examly.springapp.service;
 
 import com.examly.springapp.model.Organization;
 import com.examly.springapp.model.OrganizationMembership;
+import com.examly.springapp.model.TenantAuthenticationDetails;
 import com.examly.springapp.model.TenantContext;
 import com.examly.springapp.model.User;
 import com.examly.springapp.repository.OrganizationMembershipRepository;
@@ -43,6 +44,11 @@ public class TenantContextServiceImpl implements TenantContextService {
                 user.getRole().equalsIgnoreCase("ROLE_PLATFORM_ADMIN")
         );
 
+        Long selectedOrgId = null;
+        if (authentication.getDetails() instanceof TenantAuthenticationDetails) {
+            selectedOrgId = ((TenantAuthenticationDetails) authentication.getDetails()).getOrganizationId();
+        }
+
         List<OrganizationMembership> activeMemberships = membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE");
 
         if (activeMemberships.isEmpty()) {
@@ -50,12 +56,25 @@ public class TenantContextServiceImpl implements TenantContextService {
                     "Access denied: No active organization membership found for user. Tenant isolation enforced.");
         }
 
-        if (activeMemberships.size() > 1) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Access denied: Ambiguous organization memberships. User belongs to multiple active organizations without selector.");
+        OrganizationMembership membership = null;
+        if (selectedOrgId != null) {
+            for (OrganizationMembership mem : activeMemberships) {
+                if (mem.getOrganization() != null && selectedOrgId.equals(mem.getOrganization().getId())) {
+                    membership = mem;
+                    break;
+                }
+            }
+            if (membership == null) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Access denied: User does not have an active membership in the selected organization.");
+            }
+        } else {
+            if (activeMemberships.size() > 1) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Access denied: Ambiguous organization memberships. User belongs to multiple active organizations without selector.");
+            }
+            membership = activeMemberships.get(0);
         }
-
-        OrganizationMembership membership = activeMemberships.get(0);
         Organization organization = membership.getOrganization();
 
         if (organization == null || !"ACTIVE".equalsIgnoreCase(organization.getStatus())) {

@@ -109,8 +109,18 @@ public class JwtUtil {
     }
 
     public String generateToken(String username, String role) {
+        return generateToken(username, role, null, null);
+    }
+
+    public String generateToken(String username, String role, Long organizationId, String organizationSlug) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", role);
+        if (organizationId != null) {
+            claims.put("orgId", organizationId);
+        }
+        if (organizationSlug != null) {
+            claims.put("orgSlug", organizationSlug);
+        }
         return Jwts.builder()
                 .claims(claims)
                 .subject(username)
@@ -127,6 +137,28 @@ public class JwtUtil {
     public String extractRole(String token) {
         Object role = extractAllClaims(token).get("role");
         return role != null ? role.toString() : "employee";
+    }
+
+    public Long extractOrganizationId(String token) {
+        try {
+            Object orgId = extractAllClaims(token).get("orgId");
+            if (orgId instanceof Number) {
+                return ((Number) orgId).longValue();
+            } else if (orgId != null) {
+                return Long.parseLong(orgId.toString());
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    public String extractOrganizationSlug(String token) {
+        try {
+            Object orgSlug = extractAllClaims(token).get("orgSlug");
+            return orgSlug != null ? orgSlug.toString() : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     public boolean validateToken(String token) {

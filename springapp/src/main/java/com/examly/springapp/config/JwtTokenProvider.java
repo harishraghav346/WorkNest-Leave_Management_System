@@ -1,6 +1,7 @@
 package com.examly.springapp.config;
 
 import com.examly.springapp.model.OrganizationMembership;
+import com.examly.springapp.model.TenantAuthenticationDetails;
 import com.examly.springapp.model.User;
 import com.examly.springapp.repository.OrganizationMembershipRepository;
 import com.examly.springapp.repository.UserRepository;
@@ -55,17 +56,38 @@ public class JwtTokenProvider extends OncePerRequestFilter {
                     Set<GrantedAuthority> authorities = new HashSet<>();
 
                     // 1. Tenant membership authority derived from live database status
-                    List<OrganizationMembership> activeMemberships = membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE");
-                    if (activeMemberships.size() == 1) {
-                        OrganizationMembership mem = activeMemberships.get(0);
-                        if (mem.getOrganization() != null && "ACTIVE".equalsIgnoreCase(mem.getOrganization().getStatus())) {
-                            String memRole = mem.getRole();
-                            if (memRole != null && !memRole.isBlank()) {
-                                String authName = memRole.startsWith("ROLE_") ? memRole.toUpperCase() : "ROLE_" + memRole.toUpperCase();
-                                authorities.add(new SimpleGrantedAuthority(authName));
+                    Long tokenOrgId = jwtUtil.extractOrganizationId(jwt);
+                    TenantAuthenticationDetails tenantDetails = null;
+
+                    if (tokenOrgId != null) {
+                        java.util.Optional<OrganizationMembership> memOpt = membershipRepository.findByOrganizationIdAndUserIdAndStatus(tokenOrgId, user.getId(), "ACTIVE");
+                        if (memOpt.isPresent()) {
+                            OrganizationMembership mem = memOpt.get();
+                            if (mem.getOrganization() != null && "ACTIVE".equalsIgnoreCase(mem.getOrganization().getStatus())) {
+                                String memRole = mem.getRole();
+                                if (memRole != null && !memRole.isBlank()) {
+                                    String authName = memRole.startsWith("ROLE_") ? memRole.toUpperCase() : "ROLE_" + memRole.toUpperCase();
+                                    authorities.add(new SimpleGrantedAuthority(authName));
+                                }
+                                tenantDetails = new TenantAuthenticationDetails(tokenOrgId, mem.getOrganization().getSlug());
+                            }
+                        }
+                    } else {
+                        List<OrganizationMembership> activeMemberships = membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE");
+                        if (activeMemberships.size() == 1) {
+                            OrganizationMembership mem = activeMemberships.get(0);
+                            if (mem.getOrganization() != null && "ACTIVE".equalsIgnoreCase(mem.getOrganization().getStatus())) {
+                                String memRole = mem.getRole();
+                                if (memRole != null && !memRole.isBlank()) {
+                                    String authName = memRole.startsWith("ROLE_") ? memRole.toUpperCase() : "ROLE_" + memRole.toUpperCase();
+                                    authorities.add(new SimpleGrantedAuthority(authName));
+                                }
+                                tenantDetails = new TenantAuthenticationDetails(mem.getOrganization().getId(), mem.getOrganization().getSlug());
                             }
                         }
                     }
+
+                    List<OrganizationMembership> activeMemberships = membershipRepository.findByUserIdAndStatus(user.getId(), "ACTIVE");
 
                     // 2. Platform Admin authority strictly for explicit platform admins without tenant membership
                     // OR if user.getRole() is specifically PLATFORM_ADMIN / ROLE_PLATFORM_ADMIN
@@ -97,7 +119,21 @@ public class JwtTokenProvider extends OncePerRequestFilter {
                             null, 
                             authorities
                         );
+                    if (tenantDetails != null) {
+                        authentication.setDetails(tenantDetails);
+                    }
                     
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                } else {
+                    String role = jwtUtil.extractRole(jwt);
+                    String baseRole = role != null ? role.toUpperCase() : "EMPLOYEE";
+                    String authName = baseRole.startsWith("ROLE_") ? baseRole : "ROLE_" + baseRole;
+                    UsernamePasswordAuthenticationToken authentication = 
+                        new UsernamePasswordAuthenticationToken(
+                            username, 
+                            null, 
+                            List.of(new SimpleGrantedAuthority(authName))
+                        );
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             }
